@@ -2741,7 +2741,10 @@ mod tests {
             Module<'_>,
             Module {
                 id: None,
-                entrypoint: Some(Start{ idx: Index::Ident("$f"), .. }),
+                entrypoint: Some(Start {
+                    idx: Index::Ident("$f"),
+                    ..
+                }),
                 ..
             }
         );
@@ -2751,7 +2754,10 @@ mod tests {
             Module<'_>,
             Module {
                 id: None,
-                entrypoint: Some(Start{ idx: Index::Ident("$f"), .. }),
+                entrypoint: Some(Start {
+                    idx: Index::Ident("$f"),
+                    ..
+                }),
                 ..
             }
         );
@@ -2762,8 +2768,12 @@ mod tests {
             Module { id: None, types, .. } if types.len() == 2
         );
 
-        assert_error!(r#"(module"#, Module<'_>, UnexpectedEndOfFile{..});
-        assert_error!(r#"(module $foo (type $f (func))"#, Module<'_>, UnexpectedEndOfFile{..});
+        assert_error!(r#"(module"#, Module<'_>, UnexpectedEndOfFile { .. });
+        assert_error!(
+            r#"(module $foo (type $f (func))"#,
+            Module<'_>,
+            UnexpectedEndOfFile { .. }
+        );
         assert_error!(
             r#"(module $foo (start $f) (start 3))"#,
             Module<'_>,
@@ -2773,7 +2783,8 @@ mod tests {
                     ..
                 },
                 Start {
-                    idx: Index::Num(3), ..
+                    idx: Index::Num(3),
+                    ..
                 },
             )
         );
@@ -2781,7 +2792,10 @@ mod tests {
         assert_error!(
             r#"(type $f1 (func)) )"#,
             Module<'_>,
-            ExpectEndOfFile { token: Token::RParen, .. }
+            ExpectEndOfFile {
+                token: Token::RParen,
+                ..
+            }
         );
         // imports must be put before other definitions
         assert_error!(
@@ -2873,10 +2887,21 @@ mod tests {
 
     #[test]
     fn type_def() {
-        assert_parse!(r#"(type $f1 (func))"#, TypeDef<'_>, TypeDef{ id: Some("$f1"), .. });
-        assert_parse!(r#"(type (func))"#, TypeDef<'_>, TypeDef{ id: None, .. });
+        assert_parse!(
+            r#"(type $f1 (func))"#,
+            TypeDef<'_>,
+            TypeDef {
+                id: Some("$f1"),
+                ..
+            }
+        );
+        assert_parse!(r#"(type (func))"#, TypeDef<'_>, TypeDef { id: None, .. });
 
-        assert_error!(r#"(type (func) (func))"#, TypeDef<'_>, MissingParen { paren: ')', .. });
+        assert_error!(
+            r#"(type (func) (func))"#,
+            TypeDef<'_>,
+            MissingParen { paren: ')', .. }
+        );
         assert_error!(r#"(type)"#, TypeDef<'_>, MissingParen { paren: '(', .. });
         assert_error!(r#"(type"#, TypeDef<'_>, UnexpectedEndOfFile { .. });
     }
@@ -2896,10 +2921,28 @@ mod tests {
         "#, FuncType<'_>, FuncType{ params, results, .. } if params.len() == 2 && results.len() == 2);
         // Abbreviation
 
-        assert_error!(r#"func"#, FuncType<'_>, MissingParen{ paren: '(', .. });
-        assert_error!(r#"(type"#, FuncType<'_>, UnexpectedToken{ expected: "'func' keyword", .. });
-        assert_error!(r#"(func "#, FuncType<'_>, UnexpectedEndOfFile{ expected: "parameter", .. });
-        assert_error!(r#"(func (result i32) foo"#, FuncType<'_>, MissingParen{ paren: ')', .. });
+        assert_error!(r#"func"#, FuncType<'_>, MissingParen { paren: '(', .. });
+        assert_error!(
+            r#"(type"#,
+            FuncType<'_>,
+            UnexpectedToken {
+                expected: "'func' keyword",
+                ..
+            }
+        );
+        assert_error!(
+            r#"(func "#,
+            FuncType<'_>,
+            UnexpectedEndOfFile {
+                expected: "parameter",
+                ..
+            }
+        );
+        assert_error!(
+            r#"(func (result i32) foo"#,
+            FuncType<'_>,
+            MissingParen { paren: ')', .. }
+        );
     }
 
     #[test]
@@ -2939,74 +2982,91 @@ mod tests {
         );
         assert_params!(
             "(param $a i32) (param i64) (param f32) (param $b f64)",
-            [Param {
-                id: Some("$a"),
-                ty: ValType::I32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::I64,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::F32,
-                ..
-            }, Param {
-                id: Some("$b"),
-                ty: ValType::F64,
-                ..
-            }]
+            [
+                Param {
+                    id: Some("$a"),
+                    ty: ValType::I32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::I64,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::F32,
+                    ..
+                },
+                Param {
+                    id: Some("$b"),
+                    ty: ValType::F64,
+                    ..
+                }
+            ]
         );
 
         assert_params!("", []);
         assert_params!("(param)", []);
         assert_params!(
             "(param i32 i64 f32 f64)",
-            [Param {
-                id: None,
-                ty: ValType::I32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::I64,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::F32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::F64,
-                ..
-            }]
+            [
+                Param {
+                    id: None,
+                    ty: ValType::I32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::I64,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::F32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::F64,
+                    ..
+                }
+            ]
         );
         assert_params!(
             "(param i32 i64) (param $a i32) (param) (param f32 f64) (param $b i64)",
-            [Param {
-                id: None,
-                ty: ValType::I32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::I64,
-                ..
-            }, Param {
-                id: Some("$a"),
-                ty: ValType::I32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::F32,
-                ..
-            }, Param {
-                id: None,
-                ty: ValType::F64,
-                ..
-            }, Param {
-                id: Some("$b"),
-                ty: ValType::I64,
-                ..
-            }]
+            [
+                Param {
+                    id: None,
+                    ty: ValType::I32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::I64,
+                    ..
+                },
+                Param {
+                    id: Some("$a"),
+                    ty: ValType::I32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::F32,
+                    ..
+                },
+                Param {
+                    id: None,
+                    ty: ValType::F64,
+                    ..
+                },
+                Param {
+                    id: Some("$b"),
+                    ty: ValType::I64,
+                    ..
+                }
+            ]
         );
     }
 
@@ -3018,7 +3078,14 @@ mod tests {
         assert_parse!(r#"f64"#, ValType, ValType::F64);
 
         assert_error!(r#"string"#, ValType, InvalidValType("string"));
-        assert_error!(r#"$hello"#, ValType, UnexpectedToken{ expected: "keyword for value type", .. });
+        assert_error!(
+            r#"$hello"#,
+            ValType,
+            UnexpectedToken {
+                expected: "keyword for value type",
+                ..
+            }
+        );
     }
 
     #[test]
@@ -3045,48 +3112,80 @@ mod tests {
         assert_results!(
             "(result i32)",
             [FuncResult {
-                ty: ValType::I32, ..
+                ty: ValType::I32,
+                ..
             }]
         );
         assert_results!(
             "(result i32) (result i64) (result f32) (result f64) ",
-            [FuncResult {
-                ty: ValType::I32, ..
-            }, FuncResult {
-                ty: ValType::I64, ..
-            }, FuncResult {
-                ty: ValType::F32, ..
-            }, FuncResult {
-                ty: ValType::F64, ..
-            }]
+            [
+                FuncResult {
+                    ty: ValType::I32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::I64,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F64,
+                    ..
+                }
+            ]
         );
         assert_results!(
             "(result i32 i64 f32 f64) ",
-            [FuncResult {
-                ty: ValType::I32, ..
-            }, FuncResult {
-                ty: ValType::I64, ..
-            }, FuncResult {
-                ty: ValType::F32, ..
-            }, FuncResult {
-                ty: ValType::F64, ..
-            }]
+            [
+                FuncResult {
+                    ty: ValType::I32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::I64,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F64,
+                    ..
+                }
+            ]
         );
         assert_results!(
             "(result i32 i64) (result f32) (result) (result f64 i32) (result i64)",
-            [FuncResult {
-                ty: ValType::I32, ..
-            }, FuncResult {
-                ty: ValType::I64, ..
-            }, FuncResult {
-                ty: ValType::F32, ..
-            }, FuncResult {
-                ty: ValType::F64, ..
-            }, FuncResult {
-                ty: ValType::I32, ..
-            }, FuncResult {
-                ty: ValType::I64, ..
-            }]
+            [
+                FuncResult {
+                    ty: ValType::I32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::I64,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::F64,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::I32,
+                    ..
+                },
+                FuncResult {
+                    ty: ValType::I64,
+                    ..
+                }
+            ]
         );
     }
 
@@ -3123,11 +3222,26 @@ mod tests {
             })
         );
 
-        assert_error!(r#"import"#, ImportItem<'_>, MissingParen{ paren: '(', .. });
-        assert_error!(r#"(hello"#, ImportItem<'_>, UnexpectedToken{ expected: "'import' keyword", .. });
-        assert_error!(r#"(import "mod" "name" (func)"#, ImportItem<'_>, MissingParen{ paren: ')', .. });
-        assert_error!(r#"(import "mod" (func)"#, ImportItem<'_>, UnexpectedToken{ .. });
-        assert_error!(r#"(import (func)"#, ImportItem<'_>, UnexpectedToken{ .. });
+        assert_error!(r#"import"#, ImportItem<'_>, MissingParen { paren: '(', .. });
+        assert_error!(
+            r#"(hello"#,
+            ImportItem<'_>,
+            UnexpectedToken {
+                expected: "'import' keyword",
+                ..
+            }
+        );
+        assert_error!(
+            r#"(import "mod" "name" (func)"#,
+            ImportItem<'_>,
+            MissingParen { paren: ')', .. }
+        );
+        assert_error!(
+            r#"(import "mod" (func)"#,
+            ImportItem<'_>,
+            UnexpectedToken { .. }
+        );
+        assert_error!(r#"(import (func)"#, ImportItem<'_>, UnexpectedToken { .. });
     }
 
     #[test]
@@ -3220,8 +3334,12 @@ mod tests {
         assert_eq!(parser.ctx.mem_indices.indices.len(), 1);
         assert_eq!(parser.ctx.global_indices.indices.len(), 1);
 
-        assert_error!(r#"func"#, ImportItem<'_>, MissingParen{ paren: '(', .. });
-        assert_error!(r#"(import "m" "n" (func"#, ImportItem<'_>, UnexpectedEndOfFile{ .. });
+        assert_error!(r#"func"#, ImportItem<'_>, MissingParen { paren: '(', .. });
+        assert_error!(
+            r#"(import "m" "n" (func"#,
+            ImportItem<'_>,
+            UnexpectedEndOfFile { .. }
+        );
     }
 
     #[test]
@@ -3363,8 +3481,22 @@ mod tests {
         assert_parse!(r#"0x1f"#, Index<'_>, Index::Num(0x1f));
         assert_parse!(r#"$foo"#, Index<'_>, Index::Ident("$foo"));
 
-        assert_error!(r#"hi"#, Index<'_>, UnexpectedToken{ expected: "number or identifier for index", .. });
-        assert_error!(r#""#, Index<'_>, UnexpectedEndOfFile{ expected: "number or identifier for index", .. });
+        assert_error!(
+            r#"hi"#,
+            Index<'_>,
+            UnexpectedToken {
+                expected: "number or identifier for index",
+                ..
+            }
+        );
+        assert_error!(
+            r#""#,
+            Index<'_>,
+            UnexpectedEndOfFile {
+                expected: "number or identifier for index",
+                ..
+            }
+        );
     }
 
     #[test]
@@ -3384,8 +3516,22 @@ mod tests {
             }
         );
 
-        assert_error!(r#"0 1 hi"#, TableType, UnexpectedToken{ expected: "'funcref' keyword for table type", .. });
-        assert_error!(r#"hi"#, TableType, UnexpectedToken{ expected: "u32 for min table limit", .. });
+        assert_error!(
+            r#"0 1 hi"#,
+            TableType,
+            UnexpectedToken {
+                expected: "'funcref' keyword for table type",
+                ..
+            }
+        );
+        assert_error!(
+            r#"hi"#,
+            TableType,
+            UnexpectedToken {
+                expected: "u32 for min table limit",
+                ..
+            }
+        );
     }
 
     #[test]
@@ -3421,18 +3567,20 @@ mod tests {
         assert_error!(
             r#""#,
             GlobalType,
-            UnexpectedEndOfFile { expected: "'(' for mut or value type of global type", .. }
+            UnexpectedEndOfFile {
+                expected: "'(' for mut or value type of global type",
+                ..
+            }
         );
         assert_error!(
             r#"(hello"#,
             GlobalType,
-            UnexpectedToken { expected: "'mut' keyword for global type", .. }
+            UnexpectedToken {
+                expected: "'mut' keyword for global type",
+                ..
+            }
         );
-        assert_error!(
-            r#"(mut i32"#,
-            GlobalType,
-            MissingParen { paren: ')', .. }
-        );
+        assert_error!(r#"(mut i32"#, GlobalType, MissingParen { paren: ')', .. });
     }
 
     #[test]
@@ -3458,10 +3606,25 @@ mod tests {
             Export{ name: Name(n), kind: ExportKind::Global, idx: Index::Num(0), .. } if n == "hi"
         );
 
-        assert_error!(r#"export"#, Export<'_>, MissingParen{ paren: '(', .. });
-        assert_error!(r#"(export "hi" (func 0"#, Export<'_>, MissingParen{ paren: ')', .. });
-        assert_error!(r#"(export "hi" (func 0)"#, Export<'_>, MissingParen{ paren: ')', .. });
-        assert_error!(r#"(hello"#, Export<'_>, UnexpectedToken{ expected: "'export' keyword for export", .. });
+        assert_error!(r#"export"#, Export<'_>, MissingParen { paren: '(', .. });
+        assert_error!(
+            r#"(export "hi" (func 0"#,
+            Export<'_>,
+            MissingParen { paren: ')', .. }
+        );
+        assert_error!(
+            r#"(export "hi" (func 0)"#,
+            Export<'_>,
+            MissingParen { paren: ')', .. }
+        );
+        assert_error!(
+            r#"(hello"#,
+            Export<'_>,
+            UnexpectedToken {
+                expected: "'export' keyword for export",
+                ..
+            }
+        );
         assert_error!(
             r#"(export "hi" (hello 0))"#,
             Export<'_>,
@@ -3530,7 +3693,8 @@ mod tests {
             Func {
                 id: Some("$f"),
                 ty: TypeUse {
-                    idx: TypeIndex::Explicit(Index::Num(0)), ..
+                    idx: TypeIndex::Explicit(Index::Num(0)),
+                    ..
                 },
                 ..
             }
@@ -3541,7 +3705,8 @@ mod tests {
             Func {
                 id: Some("$f"),
                 ty: TypeUse {
-                    idx: TypeIndex::Implicit(0), ..
+                    idx: TypeIndex::Implicit(0),
+                    ..
                 },
                 ..
             }
@@ -3667,9 +3832,7 @@ mod tests {
         let parser = assert_parse!(
             r#"(func (export "a") (export "b") (export "c"))"#,
             Func<'_>,
-            Func {
-                ..
-            }
+            Func { .. }
         );
         assert!(matches!(parser.ctx.exports.as_slice(), [
             Export {
@@ -4096,14 +4259,20 @@ mod tests {
         assert_insn!(r#"call $f"#, [Call(Index::Ident("$f"))]);
         assert_insn!(
             r#"call_indirect (type 0)"#,
-            [CallIndirect(TypeUse{ idx: TypeIndex::Explicit(Index::Num(0)), .. })]
+            [CallIndirect(TypeUse {
+                idx: TypeIndex::Explicit(Index::Num(0)),
+                ..
+            })]
         );
 
-        assert_error!(r#"br_table)"#, Vec<Instruction<'_>>, InvalidOperand{ .. });
+        assert_error!(r#"br_table)"#, Vec<Instruction<'_>>, InvalidOperand { .. });
         assert_error!(
             r#"(if (then nop) else nop)"#,
             Vec<Instruction<'_>>,
-            UnexpectedToken{ got: Token::Keyword("else"), .. }
+            UnexpectedToken {
+                got: Token::Keyword("else"),
+                ..
+            }
         );
         assert_error!(
             r#"call_indirect (type 0) (param $p i32))"#,
@@ -4129,7 +4298,11 @@ mod tests {
         assert_insn!(r#"global.get 0"#, [GlobalGet(Index::Num(0))]);
         assert_insn!(r#"global.set 0"#, [GlobalSet(Index::Num(0))]);
 
-        assert_error!(r#"local.get foo"#, Vec<Instruction<'_>>, UnexpectedToken{ .. });
+        assert_error!(
+            r#"local.get foo"#,
+            Vec<Instruction<'_>>,
+            UnexpectedToken { .. }
+        );
     }
 
     #[test]
@@ -4203,7 +4376,7 @@ mod tests {
         assert_error!(
             r#"i32.load align=pqr"#,
             Vec<Instruction<'_>>,
-            CannotParseNum{ .. }
+            CannotParseNum { .. }
         );
         assert_error!(
             r#"i32.load align=0"#,
@@ -4238,7 +4411,10 @@ mod tests {
         assert_error!(
             r#"i32.const 0.123"#,
             Vec<Instruction<'_>>,
-            UnexpectedToken{ expected: "integer for i32.const operand", .. }
+            UnexpectedToken {
+                expected: "integer for i32.const operand",
+                ..
+            }
         );
         // uint32_max + 1
         assert_error!(
@@ -4302,7 +4478,10 @@ mod tests {
         assert_error!(
             r#"i64.const 0.123"#,
             Vec<Instruction<'_>>,
-            UnexpectedToken{ expected: "integer for i64.const operand", .. }
+            UnexpectedToken {
+                expected: "integer for i64.const operand",
+                ..
+            }
         );
         assert_error!(
             r#"i64.const 0x10000000000000000"#, // UINT64_MAX + 1
@@ -4653,11 +4832,7 @@ mod tests {
             Elem<'_>,
             Elem { offset, .. } if matches!(offset[0].kind, I32Const(42))
         );
-        assert_parse!(
-            r#"(elem i32.const 0 func $f)"#,
-            Elem<'_>,
-            Elem { ..  }
-        );
+        assert_parse!(r#"(elem i32.const 0 func $f)"#, Elem<'_>, Elem { .. });
     }
 
     #[test]
@@ -4671,7 +4846,8 @@ mod tests {
             r#"(table $tbl 0 0 funcref)"#,
             TableAbbrev<'_>,
             TableAbbrev::Table(Table {
-                id: Some("$tbl"), ..
+                id: Some("$tbl"),
+                ..
             })
         );
         assert_parse!(
@@ -4705,10 +4881,9 @@ mod tests {
             TableAbbrev<'_>,
             TableAbbrev::Table(Table {
                 id: Some("$tbl"),
-                ty:
-                    TableType {
-                        limit: Limits::From { min: 2 },
-                    },
+                ty: TableType {
+                    limit: Limits::From { min: 2 },
+                },
                 ..
             })
         );
@@ -4726,10 +4901,9 @@ mod tests {
             TableAbbrev<'_>,
             TableAbbrev::Table(Table {
                 id: Some("$tbl"),
-                ty:
-                    TableType {
-                        limit: Limits::From { min: 2 },
-                    },
+                ty: TableType {
+                    limit: Limits::From { min: 2 },
+                },
                 ..
             })
         );
@@ -4764,7 +4938,8 @@ mod tests {
             r#"(table $tbl (export "n1") (export "n2") (import "m" "n3") 2 funcref)"#,
             TableAbbrev<'_>,
             TableAbbrev::Table(Table {
-                import: Some(_), ..
+                import: Some(_),
+                ..
             })
         );
         assert_eq!(parser.ctx.exports.len(), 2);
@@ -4778,12 +4953,12 @@ mod tests {
         assert_error!(
             r#"(table $t (import "m" "n") (export "n2") 2 funcref)"#,
             TableAbbrev<'_>,
-            UnexpectedToken{ .. }
+            UnexpectedToken { .. }
         );
         assert_error!(
             r#"(table $t funcref (elem 1) (export "n"))"#,
             TableAbbrev<'_>,
-            MissingParen{ paren: ')', .. }
+            MissingParen { paren: ')', .. }
         );
     }
 
@@ -4841,11 +5016,7 @@ mod tests {
                  data.as_ref() == b"Hello, world\n\0".as_ref()
         );
 
-        assert_error!(
-            r#"(data 0 "hello")"#,
-            Data<'_>,
-            UnexpectedToken{ .. }
-        );
+        assert_error!(r#"(data 0 "hello")"#, Data<'_>, UnexpectedToken { .. });
     }
 
     #[test]
@@ -4866,10 +5037,9 @@ mod tests {
             MemoryAbbrev<'_>,
             MemoryAbbrev::Memory(Memory {
                 id: None,
-                ty:
-                    MemType {
-                        limit: Limits::Range { min: 1, max: 3 },
-                    },
+                ty: MemType {
+                    limit: Limits::Range { min: 1, max: 3 },
+                },
                 ..
             })
         );
@@ -4878,10 +5048,9 @@ mod tests {
             MemoryAbbrev<'_>,
             MemoryAbbrev::Memory(Memory {
                 id: Some("$m"),
-                ty:
-                    MemType {
-                        limit: Limits::Range { min: 1, max: 3 },
-                    },
+                ty: MemType {
+                    limit: Limits::Range { min: 1, max: 3 },
+                },
                 ..
             })
         );
@@ -4979,7 +5148,8 @@ mod tests {
             r#"(memory $m (export "e1") (export "e2") (import "m" "n") 2)"#,
             MemoryAbbrev<'_>,
             MemoryAbbrev::Memory(Memory {
-                import: Some(_), ..
+                import: Some(_),
+                ..
             })
         );
         assert_eq!(parser.ctx.exports.len(), 2);
@@ -4993,12 +5163,12 @@ mod tests {
         assert_error!(
             r#"(memory $m (import "m" "n") (export "n2") 0)"#,
             MemoryAbbrev<'_>,
-            UnexpectedToken{ .. }
+            UnexpectedToken { .. }
         );
         assert_error!(
             r#"(memory $m (data "hello") (export "n"))"#,
             MemoryAbbrev<'_>,
-            MissingParen{ paren: ')', .. }
+            MissingParen { paren: ')', .. }
         );
     }
 
@@ -5089,7 +5259,10 @@ mod tests {
         let parser = assert_parse!(
             r#"(global $g (export "e") (import "m" "n") i32)"#,
             Global<'_>,
-            Global{ kind: GlobalKind::Import(_), .. }
+            Global {
+                kind: GlobalKind::Import(_),
+                ..
+            }
         );
         assert_eq!(parser.ctx.exports.len(), 1);
         assert_parse!(
@@ -5110,7 +5283,7 @@ mod tests {
         assert_error!(
             r#"(global $g (import "m" "n") (export "e") i32)"#,
             Global<'_>,
-            UnexpectedToken{ .. }
+            UnexpectedToken { .. }
         );
         assert_error!(
             r#"(global $g (mut i32) (export "e"))"#,
@@ -5121,8 +5294,22 @@ mod tests {
 
     #[test]
     fn start_function() {
-        assert_parse!(r#"(start 3)"#, Start<'_>, Start{ idx: Index::Num(3), .. });
-        assert_parse!(r#"(start $f)"#, Start<'_>, Start{ idx: Index::Ident("$f"), .. });
+        assert_parse!(
+            r#"(start 3)"#,
+            Start<'_>,
+            Start {
+                idx: Index::Num(3),
+                ..
+            }
+        );
+        assert_parse!(
+            r#"(start $f)"#,
+            Start<'_>,
+            Start {
+                idx: Index::Ident("$f"),
+                ..
+            }
+        );
     }
 
     #[test]
@@ -5275,7 +5462,8 @@ mod tests {
 
     #[test]
     fn hello_world() {
-        assert_parse!(r#"
+        assert_parse!(
+            r#"
             (module
              (type $i32_=>_none (func (param i32)))
              (type $none_=>_i32 (func (result i32)))
@@ -5294,6 +5482,9 @@ mod tests {
              )
              ;; custom section "producers", size 27
             )
-        "#, Module<'_>, Module{ .. });
+        "#,
+            Module<'_>,
+            Module { .. }
+        );
     }
 }

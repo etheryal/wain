@@ -18,13 +18,19 @@ no-dev-version = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wain-ast = { path = "../wain-ast", version = "0.2" }
+wain-ast = { path = "../wain-ast", version = "0.2", default-features = false }
 no-std-compat = "0.4"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
-default = [ "std" ]
-std = [ "no-std-compat/std" ]
-core = ["no-std-compat/alloc", "no-std-compat/unstable", "no-std-compat/compat_hash", "no-std-compat/compat_sync", "no-std-compat/compat_macros"]
+default = ["std"]
+std = ["no-std-compat/std", "wain-ast/std"]
+core = [
+    "no-std-compat/alloc",
+    "no-std-compat/unstable",
+    "no-std-compat/compat_hash",
+    "no-std-compat/compat_sync",
+    "no-std-compat/compat_macros",
+]

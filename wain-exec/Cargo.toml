@@ -22,13 +22,19 @@ wain-ast = { path = "../wain-ast", version = "0.2" }
 no-std-compat = "0.4"
 
 [dev-dependencies]
-wain-syntax-text = { path = "../wain-syntax-text", version = "0.2" }
-wain-validate = { path = "../wain-validate", version = "0.1" }
+wain-syntax-text = { path = "../wain-syntax-text", version = "0.2", default-features = false }
+wain-validate = { path = "../wain-validate", version = "0.1", default-features = false }
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
-default = [ "std" ]
-std = [ "no-std-compat/std" ]
-core = ["no-std-compat/alloc", "no-std-compat/unstable", "no-std-compat/compat_hash", "no-std-compat/compat_sync", "no-std-compat/compat_macros"]
+default = ["std"]
+std = ["no-std-compat/std", "wain-validate/std", "wain-syntax-text/std"]
+core = [
+    "no-std-compat/alloc",
+    "no-std-compat/unstable",
+    "no-std-compat/compat_hash",
+    "no-std-compat/compat_sync",
+    "no-std-compat/compat_macros",
+]

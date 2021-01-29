@@ -194,6 +194,6 @@ mod tests {
         }];
 
         let err = Globals::instantiate(&globals).unwrap_err();
-        assert!(matches!(err.reason, TrapReason::UnknownImport{..}));
+        assert!(matches!(err.reason, TrapReason::UnknownImport { .. }));
     }
 }
