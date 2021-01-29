@@ -3,7 +3,6 @@
 // - https://webassembly.github.io/spec/core/appendix/algorithm.html#algo-valid
 #![forbid(unsafe_code)]
 #![warn(clippy::dbg_macro)]
-
 #![no_std]
 
 extern crate no_std_compat as std;
@@ -107,7 +106,7 @@ impl<'m, 's, S: Source> Context<'m, 's, S> {
     }
 }
 
-pub fn validate<'m, 's, S: Source>(root: &'m Root<'s, S>) -> Result<(), S> {
+pub fn validate<S: Source>(root: &Root<S>) -> Result<(), S> {
     let mut ctx = Context::new(&root.module, &root.source);
     root.module.validate(&mut ctx)
 }
@@ -118,7 +117,7 @@ trait Validate<'s, S: Source> {
 
 impl<'s, S: Source, V: Validate<'s, S>> Validate<'s, S> for Vec<V> {
     fn validate<'m>(&self, ctx: &mut Context<'m, 's, S>) -> Result<(), S> {
-        self.iter().map(|n| n.validate(ctx)).collect()
+        self.iter().try_for_each(|n| n.validate(ctx))
     }
 }
 

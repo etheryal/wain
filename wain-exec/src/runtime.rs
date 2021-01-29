@@ -79,7 +79,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
     pub fn instantiate(module: &'m ast::Module<'s>, importer: I) -> Result<Self> {
         // TODO: 2., 3., 4. Validate external values before instantiate globals
 
-        fn unknown_import<'s>(import: &ast::Import<'s>, at: usize) -> Box<Trap> {
+        fn unknown_import(import: &ast::Import, at: usize) -> Box<Trap> {
             Trap::new(
                 TrapReason::UnknownImport {
                     mod_name: import.mod_name.0.to_string(),
@@ -333,7 +333,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
 
     fn load<V: LittleEndian>(&mut self, mem: &ast::Mem, at: usize) -> Result<V> {
         let addr = self.mem_addr(mem);
-        Ok(self.module.memory.load(addr, at)?)
+        self.module.memory.load(addr, at)
     }
 
     fn store<V: LittleEndian>(&mut self, mem: &ast::Mem, v: V, at: usize) -> Result<()> {

@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::dbg_macro)]
 #![allow(clippy::cognitive_complexity)]
-
 #![no_std]
 
 extern crate no_std_compat as std;

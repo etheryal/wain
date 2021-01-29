@@ -267,7 +267,10 @@ impl<'s> ParseContext<'s> {
     }
 }
 
-trait IsInfinite {
+trait IsInfinite
+where
+    Self: Copy,
+{
     fn is_infinite(self) -> bool;
 }
 
@@ -776,7 +779,7 @@ macro_rules! parse_hex_float_fn {
 
                     // Encode significand & biased exponent (it may be infinity)
                     (temp_sig >> 5) + ((temp_exp + TEMP_EXP_BIAS) as $uint << SIGNIFICAND_BITS - 1)
-                } else if TEMP_MIN_EXP - SIGNIFICAND_BITS <= temp_exp && temp_exp < TEMP_MIN_EXP {
+                } else if (TEMP_MIN_EXP - SIGNIFICAND_BITS..TEMP_MIN_EXP).contains(&temp_exp) {
                     // Subnormal or zero
                     // Explained at 4.ii. in https://github.com/rhysd/wain/pull/9#discussion_r429552186
 

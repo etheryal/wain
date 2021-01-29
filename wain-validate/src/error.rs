@@ -1,6 +1,6 @@
-use std::prelude::v1::*;
 use std::borrow::Cow;
 use std::fmt;
+use std::prelude::v1::*;
 use wain_ast::source::Source;
 use wain_ast::*;
 
