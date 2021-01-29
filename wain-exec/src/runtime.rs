@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::cast;
 use crate::globals::Globals;
 use crate::import::{ImportInvalidError, ImportInvokeError, Importer};

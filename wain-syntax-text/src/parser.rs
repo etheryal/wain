@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::ast::*;
 use crate::lexer::{Float, LexError, Lexer, NumBase, Sign, Token};
 use crate::source::describe_position;

@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::source::describe_position;
 use std::fmt;
 use std::str::Utf8Error;

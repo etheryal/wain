@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::error::{Error, ErrorKind, Result};
 use crate::leb128::Leb128;
 use crate::source::BinarySource;

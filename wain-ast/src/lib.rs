@@ -1,6 +1,12 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::dbg_macro)]
 
+#![no_std]
+
+extern crate no_std_compat as std;
+
+use std::prelude::v1::*;
+
 pub mod source;
 
 use std::borrow::Cow;

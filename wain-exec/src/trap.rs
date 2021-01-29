@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::value::Value;
 use std::fmt;
 use wain_ast::{Import, ValType};

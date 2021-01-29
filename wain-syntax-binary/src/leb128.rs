@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 // Integers are encoded with LEB128 (Little Endian Base 128)
 // - https://webassembly.github.io/spec/core/binary/values.html#integers
 // - https://en.wikipedia.org/wiki/LEB128

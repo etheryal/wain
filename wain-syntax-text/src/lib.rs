@@ -2,6 +2,9 @@
 #![warn(clippy::dbg_macro)]
 #![allow(clippy::cognitive_complexity)]
 
+#![no_std]
+
+extern crate no_std_compat as std;
 extern crate wain_ast;
 
 pub mod ast;
@@ -10,6 +13,8 @@ pub mod lexer;
 pub mod parser;
 pub mod source;
 pub mod wat2wasm;
+
+use std::prelude::v1::*;
 
 use compose::{ComposeError, Composer};
 use parser::{ParseError, Parser};

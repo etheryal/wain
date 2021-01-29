@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::memory::Memory;
 use crate::stack::Stack;
 use std::io::{Read, Write};

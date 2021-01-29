@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::source::describe_position;
 use std::borrow::Cow;
 use std::char;

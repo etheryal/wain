@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::trap::{Result, Trap};
 use crate::value::{LittleEndian, Value};
 use wain_ast::{Global, GlobalKind, InsnKind, ValType};

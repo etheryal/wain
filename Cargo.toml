@@ -26,16 +26,18 @@ lto = true
 panic = "abort"
 
 [features]
-default = ["binary", "text"]
+default = ["binary", "text", "std"]
 binary = ["wain-syntax-binary"]
 text = ["wain-syntax-text"]
+std = ["wain-ast/std", "wain-syntax-text/std", "wain-syntax-binary/std", "wain-validate/std", "wain-exec/std"]
+core = ["wain-ast/core", "wain-syntax-text/core", "wain-syntax-binary/core", "wain-validate/core", "wain-exec/core"]
 
 [dependencies]
-wain-ast = { path = "./wain-ast", version = "0.2" }
-wain-syntax-text = { path = "./wain-syntax-text", version = "0.2", optional = true }
-wain-syntax-binary = { path = "./wain-syntax-binary", version = "0.1", optional = true }
-wain-validate = { path = "./wain-validate", version = "0.1" }
-wain-exec = { path = "./wain-exec", version = "0.3" }
+wain-ast = { path = "./wain-ast", version = "0.2", default-features = false }
+wain-syntax-text = { path = "./wain-syntax-text", version = "0.2", optional = true, default-features = false }
+wain-syntax-binary = { path = "./wain-syntax-binary", version = "0.1", optional = true, default-features = false }
+wain-validate = { path = "./wain-validate", version = "0.1", default-features = false }
+wain-exec = { path = "./wain-exec", version = "0.3", default-features = false }
 
 [dev-dependencies]
 cargo-husky = { version = "1", features = ["run-cargo-clippy", "run-cargo-fmt"] }

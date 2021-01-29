@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use std::fmt;
 
 // Trait to handle source for better error message. Wasm has two format text and binary.

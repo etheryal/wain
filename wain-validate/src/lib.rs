@@ -4,7 +4,12 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::dbg_macro)]
 
+#![no_std]
+
+extern crate no_std_compat as std;
 extern crate wain_ast;
+
+use std::prelude::v1::*;
 
 mod error;
 mod insn;

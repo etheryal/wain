@@ -6,6 +6,7 @@
 // Algorithm for validating instructions:
 //   https://webassembly.github.io/spec/core/appendix/algorithm.html#algo-valid
 
+use std::prelude::v1::*;
 use crate::error::{ErrorKind, Ordinal, Result};
 use crate::Context as OuterContext;
 use std::mem;

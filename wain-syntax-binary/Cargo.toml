@@ -19,6 +19,12 @@ no-dev-version = true
 
 [dependencies]
 wain-ast = { path = "../wain-ast", version = "0.2" }
+no-std-compat = "0.4"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+default = [ "std" ]
+std = [ "no-std-compat/std" ]
+core = ["no-std-compat/alloc", "no-std-compat/unstable", "no-std-compat/compat_hash", "no-std-compat/compat_sync", "no-std-compat/compat_macros"]

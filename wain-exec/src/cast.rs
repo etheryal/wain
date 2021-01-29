@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 // Float to int conversion. When the float value cannot be represented as target integer type,
 // it causes undefined behavior. This is a bug of rustc. We need to handle it until the bug is fixed.
 //   https://github.com/rust-lang/rust/issues/10184

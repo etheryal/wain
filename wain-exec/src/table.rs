@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::globals::Globals;
 use crate::trap::{Result, Trap, TrapReason};
 use wain_ast as ast;

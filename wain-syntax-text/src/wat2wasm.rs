@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use crate::ast as wat;
 use crate::source::{describe_position, TextSource};
 use std::collections::HashMap;
