@@ -2,6 +2,7 @@ use std::prelude::v1::*;
 
 use crate::memory::Memory;
 use crate::stack::Stack;
+#[cfg(feature = "std")]
 use std::io::{Read, Write};
 use wain_ast::ValType;
 
@@ -48,17 +49,20 @@ pub fn check_func_signature(
     })
 }
 
+#[cfg(feature = "std")]
 pub struct DefaultImporter<R: Read, W: Write> {
     stdout: W,
     stdin: R,
 }
 
+#[cfg(feature = "std")]
 impl<R: Read, W: Write> Drop for DefaultImporter<R, W> {
     fn drop(&mut self) {
         let _ = self.stdout.flush();
     }
 }
 
+#[cfg(feature = "std")]
 impl<R: Read, W: Write> DefaultImporter<R, W> {
     pub fn with_stdio(stdin: R, stdout: W) -> Self {
         Self { stdin, stdout }
@@ -116,6 +120,7 @@ impl<R: Read, W: Write> DefaultImporter<R, W> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<R: Read, W: Write> Importer for DefaultImporter<R, W> {
     fn validate(
         &self,

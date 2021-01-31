@@ -2425,7 +2425,10 @@ impl<'s> Parse<'s> for MemoryAbbrev<'s> {
                             parser.closing_paren("memory")?;
 
                             // Infer memory limits from page size (64 * 1024 = 65536)
+                            #[cfg(feature = "std")]
                             let n = (data.len() as f64 / 65536.0).ceil() as u32;
+                            #[cfg(not(feature = "std"))]
+                            let n = libm::ceil(data.len() as f64 / 65536.0) as u32;
 
                             return Ok(MemoryAbbrev::Data(
                                 Memory {

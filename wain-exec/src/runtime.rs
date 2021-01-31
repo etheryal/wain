@@ -806,44 +806,104 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
             I64Rotr => runtime.binop(|l: i64, r| l.rotate_right(r as u32)),
             // Float number operations
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fabs
+            #[cfg(feature = "std")]
             F32Abs => runtime.unop(f32::abs),
+            #[cfg(not(feature = "std"))]
+            F32Abs => runtime.unop(libm::fabsf),
+            #[cfg(feature = "std")]
             F64Abs => runtime.unop(f64::abs),
+            #[cfg(not(feature = "std"))]
+            F64Abs => runtime.unop(libm::fabs),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fneg
             F32Neg => runtime.unop(f32::neg),
             F64Neg => runtime.unop(f64::neg),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fceil
+            #[cfg(feature = "std")]
             F32Ceil => runtime.unop(f32::ceil),
+            #[cfg(not(feature = "std"))]
+            F32Ceil => runtime.unop(libm::ceil),
+            #[cfg(feature = "std")]
             F64Ceil => runtime.unop(f64::ceil),
+            #[cfg(not(feature = "std"))]
+            F64Ceil => runtime.unop(libm::ceil),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-ffloor
+            #[cfg(feature = "std")]
             F32Floor => runtime.unop(f32::floor),
+            #[cfg(not(feature = "std"))]
+            F32Floor => runtime.unop(libm::floor),
+            #[cfg(feature = "std")]
             F64Floor => runtime.unop(f64::floor),
+            #[cfg(not(feature = "std"))]
+            F64Floor => runtime.unop(libm::floor),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-ftrunc
+            #[cfg(feature = "std")]
             F32Trunc => runtime.unop(f32::trunc),
+            #[cfg(not(feature = "std"))]
+            F32Trunc => runtime.unop(libm::trunc),
+            #[cfg(feature = "std")]
             F64Trunc => runtime.unop(f64::trunc),
+            #[cfg(not(feature = "std"))]
+            F64Trunc => runtime.unop(libm::trunc),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fnearest
             F32Nearest => runtime.unop(|f: f32| {
                 // f32::round() is not available because behavior when two values are equally near
                 // is different. For example, 4.5f32.round() is 5.0 but (f32.nearest (f32.const 4.5))
                 // is 4.0.
+                #[cfg(feature = "std")]
                 let fround = f.round();
-                if (f - fround).abs() == 0.5 && fround % 2.0 != 0.0 {
-                    f.trunc()
+                #[cfg(not(feature = "std"))]
+                let fround = libm::roundf(f);
+
+                #[cfg(feature = "std")]
+                let fabs = (f - fround).abs();
+                #[cfg(not(feature = "std"))]
+                let fabs = libm::fabsf(f - fround);
+
+                if fabs == 0.5 && fround % 2.0 != 0.0 {
+                    #[cfg(feature = "std")]
+                    let ftrunc = f.trunc();
+
+                    #[cfg(not(feature = "std"))]
+                    let ftrunc = libm::truncf(f);
+
+                    ftrunc
                 } else {
                     fround
                 }
             }),
             F64Nearest => runtime.unop(|f: f64| {
                 // f64::round() is not available for the same reason as f32.nearest
+                #[cfg(feature = "std")]
                 let fround = f.round();
-                if (f - fround).abs() == 0.5 && fround % 2.0 != 0.0 {
-                    f.trunc()
+                #[cfg(not(feature = "std"))]
+                let fround = libm::round(f);
+
+                #[cfg(feature = "std")]
+                let fabs = (f - fround).abs();
+                #[cfg(not(feature = "std"))]
+                let fabs = libm::fabs(f - fround);
+
+                if fabs== 0.5 && fround % 2.0 != 0.0 {
+                    #[cfg(feature = "std")]
+                    let ftrunc = f.trunc();
+
+                    #[cfg(not(feature = "std"))]
+                    let ftrunc = libm::trunc(f);
+
+                    ftrunc
                 } else {
                     fround
                 }
             }),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fsqrt
+            #[cfg(feature = "std")]
             F32Sqrt => runtime.unop(f32::sqrt),
+            #[cfg(not(feature = "std"))]
+            F32Sqrt => runtime.unop(libm::sqrt),
+            #[cfg(feature = "std")]
             F64Sqrt => runtime.unop(f64::sqrt),
+            #[cfg(not(feature = "std"))]
+            F64Sqrt => runtime.unop(libm::sqrt),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fadd
             F32Add => runtime.binop(f32::add),
             F64Add => runtime.binop(f64::add),
@@ -863,8 +923,14 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
             F32Max => runtime.binop(fmax::<f32>),
             F64Max => runtime.binop(fmax::<f64>),
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-fcopysign
+            #[cfg(feature = "std")]
             F32Copysign => runtime.binop(f32::copysign),
+            #[cfg(not(feature = "std"))]
+            F32Copysign => runtime.binop(libm::copysign),
+            #[cfg(feature = "std")]
             F64Copysign => runtime.binop(f64::copysign),
+            #[cfg(not(feature = "std"))]
+            F64Copysign => runtime.binop(libm::copysign),
             // Integer comparison
             // https://webassembly.github.io/spec/core/exec/numerics.html#op-ieqz
             I32Eqz => runtime.testop(|i: i32| i == 0),
@@ -985,6 +1051,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
 }
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests {
     use super::*;
     use crate::import::DefaultImporter;

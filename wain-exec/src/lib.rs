@@ -9,15 +9,16 @@ use std::prelude::v1::*;
 
 pub mod trap;
 
+mod import;
 mod cast;
 mod globals;
-mod import;
 mod memory;
 mod runtime;
 mod stack;
 mod table;
 mod value;
 
+#[cfg(feature = "std")]
 pub use import::{
     check_func_signature, DefaultImporter, ImportInvalidError, ImportInvokeError, Importer,
 };
@@ -26,7 +27,6 @@ pub use runtime::Runtime;
 pub use stack::Stack;
 pub use value::Value;
 
-use std::io;
 use trap::Result;
 use wain_ast::Module;
 
@@ -43,7 +43,10 @@ use wain_ast::Module;
 ///
 /// You will need importer for initializing Runtime struct. Please use DefaultImporter::with_stdio()
 /// or make your own importer struct which implements Importer trait.
+#[cfg(feature = "std")]
 pub fn execute(module: &Module<'_>) -> Result<()> {
+    use std::io;
+
     let stdin = io::stdin();
     let stdout = io::stdout();
     let importer = DefaultImporter::with_stdio(stdin.lock(), stdout.lock());
