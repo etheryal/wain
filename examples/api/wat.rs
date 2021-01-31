@@ -2,6 +2,7 @@ extern crate wain_exec;
 extern crate wain_syntax_text;
 extern crate wain_validate;
 
+use futures::executor::block_on;
 use std::process::exit;
 use wain_exec::execute;
 use wain_syntax_text::parse;
@@ -109,24 +110,26 @@ const HELLO_WORLD: &str = r#"
 "#;
 
 fn main() {
-    // Parse WAT text into syntax tree
-    let tree = match parse(HELLO_WORLD) {
-        Ok(tree) => tree,
-        Err(err) => {
-            eprintln!("Parse failed: {}", err);
+    block_on(async {
+        // Parse WAT text into syntax tree
+        let tree = match parse(HELLO_WORLD) {
+            Ok(tree) => tree,
+            Err(err) => {
+                eprintln!("Parse failed: {}", err);
+                exit(1);
+            }
+        };
+
+        // Validate module
+        if let Err(err) = validate(&tree) {
+            eprintln!("This .wat file is invalid: {}", err);
             exit(1);
         }
-    };
 
-    // Validate module
-    if let Err(err) = validate(&tree) {
-        eprintln!("This .wat file is invalid: {}", err);
-        exit(1);
-    }
-
-    // Execute module
-    if let Err(trap) = execute(&tree.module) {
-        eprintln!("Execution was trapped: {}", trap);
-        exit(1);
-    }
+        // Execute module
+        if let Err(trap) = execute(&tree.module).await {
+            eprintln!("Execution was trapped: {}", trap);
+            exit(1);
+        }
+    });
 }

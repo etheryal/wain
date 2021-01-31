@@ -3,6 +3,7 @@ use crate::error::{Error, ErrorKind, Result, RunKind};
 use crate::importer::SpecTestImporter;
 use crate::parser::Parser;
 use crate::wast;
+use futures::executor::block_on;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -254,7 +255,7 @@ impl<W: Write> Runner<W> {
                         source: &source,
                         script: &script,
                     };
-                    tester.test(&self.crasher);
+                    block_on(async { tester.test(&self.crasher).await });
                     let num_errs = tester.errs.len();
                     for (idx, err) in tester.errs.iter_mut().enumerate() {
                         let nth = idx + 1;
@@ -338,12 +339,13 @@ impl<'m, 's> Instances<'m, 's> {
         }
     }
 
-    fn invoke(&mut self, invoke: &wast::Invoke<'s>) -> Result<'s, Option<Value>> {
+    async fn invoke(&mut self, invoke: &wast::Invoke<'s>) -> Result<'s, Option<Value>> {
         let (runtime, mod_pos) = self.find(invoke.id, invoke.start)?;
 
         let args: Box<[Value]> = invoke.args.iter().map(|c| c.to_value().unwrap()).collect();
         let ret = runtime
             .invoke(&invoke.name, &args)
+            .await
             .map_err(|err| Error::run_error(RunKind::Trapped(*err), self.source, mod_pos))?;
 
         Ok(ret)
@@ -414,7 +416,7 @@ impl<'a> Tester<'a> {
         mods
     }
 
-    fn test(&mut self, crasher: &CrashTester) {
+    async fn test(&mut self, crasher: &CrashTester) {
         // Parse and validate modules at first
         let idx_to_mod = self.parse_embedded_modules();
 
@@ -444,6 +446,7 @@ impl<'a> Tester<'a> {
         crasher: &CrashTester,
     ) -> Result<'a, ()> {
         use wast::Command::*;
+
         match command {
             InlineModule(root) => {
                 validate(root)?;
@@ -455,7 +458,7 @@ impl<'a> Tester<'a> {
                 invoke,
                 expected,
             }) => {
-                let ret = instances.invoke(invoke)?;
+                let ret = block_on(async { instances.invoke(invoke).await })?;
                 if let (Some(expected), Some(actual)) = (*expected, ret) {
                     if !expected.matches(&actual) {
                         return Err(Error::run_error(
@@ -499,7 +502,7 @@ impl<'a> Tester<'a> {
                 expected,
                 pred: wast::TrapPredicate::Invoke(invoke),
             }) => {
-                match instances.invoke(invoke) {
+                match block_on(async { instances.invoke(invoke).await }) {
                     Ok(ret) => Err(Error::run_error(
                         RunKind::InvokeTrapExpected {
                             ret,
@@ -634,7 +637,7 @@ impl<'a> Tester<'a> {
                 self.source,
                 *start,
             )),
-            Invoke(invoke) => instances.invoke(invoke).map(|_| ()),
+            Invoke(invoke) => block_on(async { instances.invoke(invoke).await }).map(|_| ()),
         }
     }
 }

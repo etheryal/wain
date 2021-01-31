@@ -22,3 +22,4 @@ wain-syntax-text = { path = "../wain-syntax-text" }
 wain-syntax-binary = { path = "../wain-syntax-binary" }
 wain-validate = { path = "../wain-validate" }
 wain-exec = { path = "../wain-exec" }
+futures = "0.3"

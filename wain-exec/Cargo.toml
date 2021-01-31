@@ -21,6 +21,8 @@ no-dev-version = true
 wain-ast = { path = "../wain-ast", version = "0.2", default-features = false }
 no-std-compat = "0.4"
 libm = { version = "*", optional = true }
+async-trait = "0.1.42"
+futures = "0.3.12"
 
 [dev-dependencies]
 wain-syntax-text = { path = "../wain-syntax-text", version = "0.2", default-features = false }
@@ -43,5 +45,5 @@ core = [
     "no-std-compat/compat_hash",
     "no-std-compat/compat_sync",
     "no-std-compat/compat_macros",
-    "libm"
+    "libm",
 ]

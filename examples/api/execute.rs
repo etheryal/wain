@@ -2,6 +2,7 @@ extern crate wain_exec;
 extern crate wain_syntax_binary;
 extern crate wain_validate;
 
+use futures::executor::block_on;
 use std::process::exit;
 use wain_exec::execute;
 use wain_syntax_binary::parse;
@@ -36,24 +37,26 @@ const HELLO_WORLD: [u8; 381] = [
 ];
 
 fn main() {
-    // Parse Wasm binary into syntax tree. Return value is wain_ast::Root
-    let tree = match parse(&HELLO_WORLD) {
-        Ok(tree) => tree,
-        Err(err) => {
-            eprintln!("Parse failed: {}", err);
+    block_on(async {
+        // Parse Wasm binary into syntax tree. Return value is wain_ast::Root
+        let tree = match parse(&HELLO_WORLD) {
+            Ok(tree) => tree,
+            Err(err) => {
+                eprintln!("Parse failed: {}", err);
+                exit(1);
+            }
+        };
+
+        // Validate module. Validation must be doen before execution
+        if let Err(err) = validate(&tree) {
+            eprintln!("This .wasm file is invalid: {}", err);
             exit(1);
         }
-    };
 
-    // Validate module. Validation must be doen before execution
-    if let Err(err) = validate(&tree) {
-        eprintln!("This .wasm file is invalid: {}", err);
-        exit(1);
-    }
-
-    // Execute module. It invokes 'start function'
-    if let Err(trap) = execute(&tree.module) {
-        eprintln!("Execution was trapped: {}", trap);
-        exit(1);
-    }
+        // Execute module. It invokes 'start function'
+        if let Err(trap) = execute(&tree.module).await {
+            eprintln!("Execution was trapped: {}", trap);
+            exit(1);
+        }
+    });
 }

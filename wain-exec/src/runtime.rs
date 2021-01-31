@@ -8,6 +8,7 @@ use crate::stack::{Stack, StackAccess};
 use crate::table::Table;
 use crate::trap::{Result, Trap, TrapReason};
 use crate::value::{Float, LittleEndian, Value};
+use async_trait::async_trait;
 use wain_ast as ast;
 use wain_ast::AsValType;
 
@@ -152,9 +153,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
             memory.new_data(data, &globals)?;
         }
 
-        // 11. and 12. pop frame (unnecessary for now)
-
-        let mut runtime = Self {
+        Ok(Self {
             module: ModuleInstance {
                 ast: module,
                 table,
@@ -163,15 +162,17 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
             },
             stack,
             importer,
-        };
+        })
+    }
 
-        // 15. If the start function is not empty, invoke it
-        if let Some(start) = &runtime.module.ast.entrypoint {
-            // Execute entrypoint
-            runtime.invoke_by_funcidx(start.idx)?;
+    pub async fn invoke_start(&mut self) -> Result<()> {
+        if let Some(entrypoint) = &self.module().entrypoint {
+            self.invoke_by_funcidx(entrypoint.idx).await?;
+        } else {
+            self.invoke("_start", &[]).await?;
         }
 
-        Ok(runtime)
+        Ok(())
     }
 
     pub fn module(&self) -> &'m ast::Module<'s> {
@@ -231,7 +232,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
     // https://webassembly.github.io/spec/core/exec/modules.html#invocation
     // https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
     // Returns if it has return value on stack or not
-    fn invoke_by_funcidx(&mut self, funcidx: u32) -> Result<bool> {
+    async fn invoke_by_funcidx(&mut self, funcidx: u32) -> Result<bool> {
         let func = &self.module.ast.funcs[funcidx as usize];
         let fty = &self.module.ast.types[func.idx as usize];
 
@@ -246,7 +247,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
         let prev_frame = self.stack.push_frame(&fty.params, &locals);
 
         for insn in body {
-            match insn.execute(self)? {
+            match insn.execute(self).await? {
                 ExecState::Continue => {}
                 // When using br or br_if outside control instructions, it unwinds execution in
                 // the function body. Label with empty continuation is put before invoking the
@@ -262,7 +263,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
     }
 
     // Invoke function by name
-    pub fn invoke(&mut self, name: impl AsRef<str>, args: &[Value]) -> Result<Option<Value>> {
+    pub async fn invoke(&mut self, name: impl AsRef<str>, args: &[Value]) -> Result<Option<Value>> {
         fn find_func_to_invoke<'s>(
             name: &str,
             exports: &[ast::Export<'s>],
@@ -319,7 +320,7 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
             self.stack.push(arg.clone());
         }
 
-        if self.invoke_by_funcidx(funcidx)? {
+        if self.invoke_by_funcidx(funcidx).await? {
             Ok(Some(self.stack.pop()))
         } else {
             Ok(None)
@@ -424,16 +425,18 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
     }
 }
 
+#[async_trait(?Send)]
 trait Execute<'m, 's, I: Importer> {
-    fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult;
+    async fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult;
 }
 
 // https://webassembly.github.io/spec/core/exec/instructions.html#blocks
+#[async_trait(?Send)]
 impl<'m, 's, I: Importer> Execute<'m, 's, I> for Vec<ast::Instruction> {
-    fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult {
+    async fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult {
         // Run instruction sequence as block
         for insn in self {
-            match insn.execute(runtime)? {
+            match insn.execute(runtime).await? {
                 ExecState::Continue => {}
                 state => return Ok(state), // Stop executing this block on return or break
             }
@@ -443,9 +446,10 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for Vec<ast::Instruction> {
 }
 
 // https://webassembly.github.io/spec/core/exec/instructions.html
+#[async_trait(?Send)]
 impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
     #[allow(clippy::cognitive_complexity)]
-    fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult {
+    async fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult {
         use ast::InsnKind::*;
         use std::ops::*;
         #[allow(clippy::float_cmp)]
@@ -454,7 +458,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
             // https://webassembly.github.io/spec/core/exec/instructions.html#exec-block
             Block { ty, body } => {
                 let label = runtime.stack.push_label();
-                match body.execute(runtime)? {
+                match body.execute(runtime).await? {
                     ExecState::Continue => {}
                     ExecState::Ret => return Ok(ExecState::Ret),
                     ExecState::Breaking(0) => runtime.stack.pop_label(&label, ty.is_some()),
@@ -467,7 +471,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
                 loop {
                     // Note: Difference between block and loop is the position on breaking. When reaching
                     // to the end of instruction sequence, loop instruction ends execution of subsequence.
-                    match body.execute(runtime)? {
+                    match body.execute(runtime).await? {
                         ExecState::Continue => break,
                         ExecState::Ret => return Ok(ExecState::Ret),
                         ExecState::Breaking(0) => runtime.stack.pop_label(&label, false),
@@ -484,7 +488,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
                 let cond: i32 = runtime.stack.pop();
                 let label = runtime.stack.push_label();
                 let insns = if cond != 0 { then_body } else { else_body };
-                match insns.execute(runtime)? {
+                match insns.execute(runtime).await? {
                     ExecState::Continue => {}
                     ExecState::Ret => return Ok(ExecState::Ret),
                     ExecState::Breaking(0) => runtime.stack.pop_label(&label, ty.is_some()),
@@ -522,7 +526,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
             Return => return Ok(ExecState::Ret),
             // https://webassembly.github.io/spec/core/exec/instructions.html#exec-call
             Call(funcidx) => {
-                runtime.invoke_by_funcidx(*funcidx)?;
+                runtime.invoke_by_funcidx(*funcidx).await?;
             }
             // https://webassembly.github.io/spec/core/exec/instructions.html#exec-call-indirect
             CallIndirect(typeidx) => {
@@ -543,7 +547,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
                         self.start,
                     ));
                 }
-                runtime.invoke_by_funcidx(funcidx)?;
+                runtime.invoke_by_funcidx(funcidx).await?;
             }
             // Parametric instructions
             // https://webassembly.github.io/spec/core/exec/instructions.html#exec-drop
@@ -1084,6 +1088,8 @@ mod tests {
 
     #[test]
     fn hello_world() {
+        use futures::executor::block_on;
+
         fn unwrap<T, E: fmt::Display>(res: result::Result<T, E>) -> T {
             match res {
                 Ok(x) => x,
@@ -1091,7 +1097,7 @@ mod tests {
             }
         }
 
-        fn exec(file: PathBuf) -> Result<Vec<u8>> {
+        async fn exec(file: PathBuf) -> Result<Vec<u8>> {
             let source = fs::read_to_string(file).unwrap();
             let ast = unwrap(parse(&source));
             unwrap(validate(&ast));
@@ -1099,31 +1105,33 @@ mod tests {
             {
                 let importer = DefaultImporter::with_stdio(Discard, &mut stdout);
                 let mut runtime = unwrap(Runtime::instantiate(&ast.module, importer));
-                runtime.invoke("_start", &[])?;
+                runtime.invoke("_start", &[]).await?;
             }
             Ok(stdout)
         }
 
-        let mut dir = env::current_dir().unwrap();
-        dir.pop();
-        dir.push("examples");
-        dir.push("hello");
-        let dir = dir;
+        block_on(async {
+            let mut dir = env::current_dir().unwrap();
+            dir.pop();
+            dir.push("examples");
+            dir.push("hello");
+            let dir = dir;
 
-        let stdout = exec(dir.join("hello.wat")).unwrap();
-        assert_eq!(stdout, b"Hello, world\n");
+            let stdout = exec(dir.join("hello.wat")).await.unwrap();
+            assert_eq!(stdout, b"Hello, world\n");
 
-        let stdout = exec(dir.join("hello_global.wat")).unwrap();
-        assert_eq!(stdout, b"Hello, world\n");
+            let stdout = exec(dir.join("hello_global.wat")).await.unwrap();
+            assert_eq!(stdout, b"Hello, world\n");
 
-        let stdout = exec(dir.join("hello_indirect_call.wat")).unwrap();
-        assert_eq!(stdout, b"Hello, world\n");
+            let stdout = exec(dir.join("hello_indirect_call.wat")).await.unwrap();
+            assert_eq!(stdout, b"Hello, world\n");
 
-        let stdout = exec(dir.join("hello_struct.wat")).unwrap();
-        assert_eq!(stdout, b"Hello, world\n");
+            let stdout = exec(dir.join("hello_struct.wat")).await.unwrap();
+            assert_eq!(stdout, b"Hello, world\n");
+        });
     }
 
-    fn exec_insns(ty: ast::ValType, insns: Vec<ast::InsnKind>) -> Result<Option<Value>> {
+    async fn exec_insns(ty: ast::ValType, insns: Vec<ast::InsnKind>) -> Result<Option<Value>> {
         let expr = insns
             .into_iter()
             .map(|kind| ast::Instruction { start: 0, kind })
@@ -1158,89 +1166,110 @@ mod tests {
 
         let importer = DefaultImporter::with_stdio(Discard, Discard);
         let mut runtime = Runtime::instantiate(&module, importer)?;
-        runtime.invoke("test", &[])
+
+        runtime.invoke("test", &[]).await
     }
 
     #[test]
     fn nearest_edge_cases() {
         use ast::InsnKind::*;
         use ast::ValType::*;
+        use futures::executor::block_on;
 
-        let f = exec_insns(F32, vec![F32Const(4.5), F32Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F32(f) if f == 4.0));
+        block_on(async {
+            let f = exec_insns(F32, vec![F32Const(4.5), F32Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F32(f) if f == 4.0));
 
-        let f = exec_insns(F32, vec![F32Const(3.5), F32Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F32(f) if f == 4.0));
+            let f = exec_insns(F32, vec![F32Const(3.5), F32Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F32(f) if f == 4.0));
 
-        let f = exec_insns(F32, vec![F32Const(-0.5), F32Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F32(f) if f == 0.0 && f.is_sign_negative())); // -0.0
+            let f = exec_insns(F32, vec![F32Const(-0.5), F32Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F32(f) if f == 0.0 && f.is_sign_negative())); // -0.0
 
-        let f = exec_insns(F32, vec![F32Const(0.5), F32Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F32(f) if f == 0.0 && f.is_sign_positive())); // +0.0
+            let f = exec_insns(F32, vec![F32Const(0.5), F32Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F32(f) if f == 0.0 && f.is_sign_positive())); // +0.0
 
-        let f = exec_insns(F64, vec![F64Const(4.5), F64Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F64(f) if f == 4.0));
+            let f = exec_insns(F64, vec![F64Const(4.5), F64Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F64(f) if f == 4.0));
 
-        let f = exec_insns(F64, vec![F64Const(3.5), F64Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F64(f) if f == 4.0));
+            let f = exec_insns(F64, vec![F64Const(3.5), F64Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F64(f) if f == 4.0));
 
-        let f = exec_insns(F64, vec![F64Const(-0.5), F64Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F64(f) if f == 0.0 && f.is_sign_negative())); // -0.0
+            let f = exec_insns(F64, vec![F64Const(-0.5), F64Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F64(f) if f == 0.0 && f.is_sign_negative())); // -0.0
 
-        let f = exec_insns(F64, vec![F64Const(0.5), F64Nearest])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(f, Value::F64(f) if f == 0.0 && f.is_sign_positive() /* +0.0 */));
+            let f = exec_insns(F64, vec![F64Const(0.5), F64Nearest])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(f, Value::F64(f) if f == 0.0 && f.is_sign_positive() /* +0.0 */));
+        });
     }
 
     #[test]
     fn int_overflow() {
         use ast::InsnKind::*;
         use ast::ValType::*;
+        use futures::executor::block_on;
 
-        let i = exec_insns(I32, vec![I32Const(i32::MAX), I32Const(1), I32Add])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I32(i) if i == i32::MIN));
+        block_on(async {
+            let i = exec_insns(I32, vec![I32Const(i32::MAX), I32Const(1), I32Add])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I32(i) if i == i32::MIN));
 
-        let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(1), I32Sub])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I32(i) if i == i32::MAX));
+            let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(1), I32Sub])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I32(i) if i == i32::MAX));
 
-        let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(-1), I32Mul])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I32(i) if i == i32::MIN));
+            let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(-1), I32Mul])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I32(i) if i == i32::MIN));
 
-        let i = exec_insns(I64, vec![I64Const(i64::MAX), I64Const(1), I64Add])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I64(i) if i == i64::MIN));
+            let i = exec_insns(I64, vec![I64Const(i64::MAX), I64Const(1), I64Add])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I64(i) if i == i64::MIN));
 
-        let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(1), I64Sub])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I64(i) if i == i64::MAX));
+            let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(1), I64Sub])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I64(i) if i == i64::MAX));
 
-        let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(-1), I64Mul])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I64(i) if i == i64::MIN));
+            let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(-1), I64Mul])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I64(i) if i == i64::MIN));
+        });
     }
 
     #[test]
@@ -1248,130 +1277,167 @@ mod tests {
         use ast::InsnKind::*;
         use ast::ValType::*;
 
-        let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(-1), I32RemS])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I32(0)), "{:?}", i);
+        use futures::executor::block_on;
 
-        let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(-1), I64RemS])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::I64(0)), "{:?}", i);
+        block_on(async {
+            let i = exec_insns(I32, vec![I32Const(i32::MIN), I32Const(-1), I32RemS])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I32(0)), "{:?}", i);
 
-        let e = exec_insns(I32, vec![I32Const(1), I32Const(0), I32RemS]).unwrap_err();
-        assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
-        let e = exec_insns(I32, vec![I32Const(1), I32Const(0), I32RemU]).unwrap_err();
-        assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
-        let e = exec_insns(I64, vec![I64Const(1), I64Const(0), I64RemS]).unwrap_err();
-        assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
-        let e = exec_insns(I64, vec![I64Const(1), I64Const(0), I64RemU]).unwrap_err();
-        assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
+            let i = exec_insns(I64, vec![I64Const(i64::MIN), I64Const(-1), I64RemS])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::I64(0)), "{:?}", i);
+
+            let e = exec_insns(I32, vec![I32Const(1), I32Const(0), I32RemS])
+                .await
+                .unwrap_err();
+            assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
+            let e = exec_insns(I32, vec![I32Const(1), I32Const(0), I32RemU])
+                .await
+                .unwrap_err();
+            assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
+            let e = exec_insns(I64, vec![I64Const(1), I64Const(0), I64RemS])
+                .await
+                .unwrap_err();
+            assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
+            let e = exec_insns(I64, vec![I64Const(1), I64Const(0), I64RemU])
+                .await
+                .unwrap_err();
+            assert!(matches!(e.reason, TrapReason::RemZeroDivisor));
+        });
     }
 
     #[test]
     fn fmin_edge_cases() {
         use ast::InsnKind::*;
         use ast::ValType::*;
+        use futures::executor::block_on;
 
-        let i = exec_insns(F32, vec![F32Const(0.0), F32Const(-0.0), F32Min])
+        block_on(async {
+            let i = exec_insns(F32, vec![F32Const(0.0), F32Const(-0.0), F32Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x8000_0000));
+            let i = exec_insns(F32, vec![F32Const(-0.0), F32Const(0.0), F32Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x8000_0000));
+            let i = exec_insns(F32, vec![F32Const(1.0), F32Const(1.0), F32Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f == 1.0));
+            let i = exec_insns(F32, vec![F32Const(-42.0), F32Const(-42.0), F32Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f == -42.0));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::NEG_INFINITY),
+                    F32Const(f32::from_bits(0x7f80_0001)),
+                    F32Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x8000_0000));
-        let i = exec_insns(F32, vec![F32Const(-0.0), F32Const(0.0), F32Min])
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::from_bits(0x7fff_ffff)),
+                    F32Const(f32::NEG_INFINITY),
+                    F32Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x8000_0000));
-        let i = exec_insns(F32, vec![F32Const(1.0), F32Const(1.0), F32Min])
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::from_bits(0x7f80_0001)),
+                    F32Const(f32::from_bits(0x7fff_ffff)),
+                    F32Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F32(f) if f == 1.0));
-        let i = exec_insns(F32, vec![F32Const(-42.0), F32Const(-42.0), F32Min])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F32(f) if f == -42.0));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::NEG_INFINITY),
-                F32Const(f32::from_bits(0x7f80_0001)),
-                F32Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::from_bits(0x7fff_ffff)),
-                F32Const(f32::NEG_INFINITY),
-                F32Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::from_bits(0x7f80_0001)),
-                F32Const(f32::from_bits(0x7fff_ffff)),
-                F32Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
 
-        let i = exec_insns(F64, vec![F64Const(0.0), F64Const(-0.0), F64Min])
+            let i = exec_insns(F64, vec![F64Const(0.0), F64Const(-0.0), F64Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x8000_0000_0000_0000));
+            let i = exec_insns(F64, vec![F64Const(-0.0), F64Const(0.0), F64Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x8000_0000_0000_0000));
+            let i = exec_insns(F64, vec![F64Const(1.0), F64Const(1.0), F64Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f == 1.0));
+            let i = exec_insns(F64, vec![F64Const(-42.0), F64Const(-42.0), F64Min])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f == -42.0));
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::NEG_INFINITY),
+                    F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
+                    F64Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x8000_0000_0000_0000));
-        let i = exec_insns(F64, vec![F64Const(-0.0), F64Const(0.0), F64Min])
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001)
+            );
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
+                    F64Const(f64::NEG_INFINITY),
+                    F64Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x8000_0000_0000_0000));
-        let i = exec_insns(F64, vec![F64Const(1.0), F64Const(1.0), F64Min])
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff_ffff_ffff)
+            );
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
+                    F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
+                    F64Min,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f == 1.0));
-        let i = exec_insns(F64, vec![F64Const(-42.0), F64Const(-42.0), F64Min])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F64(f) if f == -42.0));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::NEG_INFINITY),
-                F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
-                F64Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
-                F64Const(f64::NEG_INFINITY),
-                F64Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff_ffff_ffff));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
-                F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
-                F64Min,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001));
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001)
+            );
+        });
     }
 
     #[test]
@@ -1379,104 +1445,128 @@ mod tests {
         use ast::InsnKind::*;
         use ast::ValType::*;
 
-        let i = exec_insns(F32, vec![F32Const(0.0), F32Const(-0.0), F32Max])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x0000_0000));
-        let i = exec_insns(F32, vec![F32Const(-0.0), F32Const(0.0), F32Max])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x0000_0000));
-        let i = exec_insns(F32, vec![F32Const(1.0), F32Const(1.0), F32Max])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F32(f) if f == 1.0));
-        let i = exec_insns(F32, vec![F32Const(-42.0), F32Const(-42.0), F32Max])
-            .unwrap()
-            .unwrap();
-        assert!(matches!(i, Value::F32(f) if f == -42.0));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::INFINITY),
-                F32Const(f32::from_bits(0x7f80_0001)),
-                F32Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::from_bits(0x7fff_ffff)),
-                F32Const(f32::INFINITY),
-                F32Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff));
-        let i = exec_insns(
-            F32,
-            vec![
-                F32Const(f32::from_bits(0x7f80_0001)),
-                F32Const(f32::from_bits(0x7fff_ffff)),
-                F32Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
+        use futures::executor::block_on;
 
-        let i = exec_insns(F64, vec![F64Const(0.0), F64Const(-0.0), F64Max])
+        block_on(async {
+            let i = exec_insns(F32, vec![F32Const(0.0), F32Const(-0.0), F32Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x0000_0000));
+            let i = exec_insns(F32, vec![F32Const(-0.0), F32Const(0.0), F32Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f.to_bits() == 0x0000_0000));
+            let i = exec_insns(F32, vec![F32Const(1.0), F32Const(1.0), F32Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f == 1.0));
+            let i = exec_insns(F32, vec![F32Const(-42.0), F32Const(-42.0), F32Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F32(f) if f == -42.0));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::INFINITY),
+                    F32Const(f32::from_bits(0x7f80_0001)),
+                    F32Max,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x0000_0000_0000_0000));
-        let i = exec_insns(F64, vec![F64Const(-0.0), F64Const(0.0), F64Max])
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::from_bits(0x7fff_ffff)),
+                    F32Const(f32::INFINITY),
+                    F32Max,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x0000_0000_0000_0000));
-        let i = exec_insns(F64, vec![F64Const(1.0), F64Const(1.0), F64Max])
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff));
+            let i = exec_insns(
+                F32,
+                vec![
+                    F32Const(f32::from_bits(0x7f80_0001)),
+                    F32Const(f32::from_bits(0x7fff_ffff)),
+                    F32Max,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f == 1.0));
-        let i = exec_insns(F64, vec![F64Const(-42.0), F64Const(-42.0), F64Max])
+            assert!(matches!(i, Value::F32(f) if f.is_nan() && f.to_bits() == 0x7fc0_0001));
+
+            let i = exec_insns(F64, vec![F64Const(0.0), F64Const(-0.0), F64Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x0000_0000_0000_0000));
+            let i = exec_insns(F64, vec![F64Const(-0.0), F64Const(0.0), F64Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f.to_bits() == 0x0000_0000_0000_0000));
+            let i = exec_insns(F64, vec![F64Const(1.0), F64Const(1.0), F64Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f == 1.0));
+            let i = exec_insns(F64, vec![F64Const(-42.0), F64Const(-42.0), F64Max])
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(matches!(i, Value::F64(f) if f == -42.0));
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::INFINITY),
+                    F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
+                    F64Max,
+                ],
+            )
+            .await
             .unwrap()
             .unwrap();
-        assert!(matches!(i, Value::F64(f) if f == -42.0));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::INFINITY),
-                F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
-                F64Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
-                F64Const(f64::INFINITY),
-                F64Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff_ffff_ffff));
-        let i = exec_insns(
-            F64,
-            vec![
-                F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
-                F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
-                F64Max,
-            ],
-        )
-        .unwrap()
-        .unwrap();
-        assert!(matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001));
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001)
+            );
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
+                    F64Const(f64::INFINITY),
+                    F64Max,
+                ],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7fff_ffff_ffff_ffff)
+            );
+            let i = exec_insns(
+                F64,
+                vec![
+                    F64Const(f64::from_bits(0x7ff0_0000_0000_0001)),
+                    F64Const(f64::from_bits(0x7fff_ffff_ffff_ffff)),
+                    F64Max,
+                ],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert!(
+                matches!(i, Value::F64(f) if f.is_nan() && f.to_bits() == 0x7ff8_0000_0000_0001)
+            );
+        });
     }
 }

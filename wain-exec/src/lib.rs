@@ -43,15 +43,13 @@ use wain_ast::Module;
 /// You will need importer for initializing Runtime struct. Please use DefaultImporter::with_stdio()
 /// or make your own importer struct which implements Importer trait.
 #[cfg(feature = "std")]
-pub fn execute(module: &Module<'_>) -> Result<()> {
+pub async fn execute(module: &Module<'_>) -> Result<()> {
     use std::io;
 
     let stdin = io::stdin();
     let stdout = io::stdout();
     let importer = DefaultImporter::with_stdio(stdin.lock(), stdout.lock());
     let mut runtime = Runtime::instantiate(module, importer)?;
-    if runtime.module().entrypoint.is_none() {
-        runtime.invoke("_start", &[])?;
-    }
+    runtime.invoke_start().await?;
     Ok(())
 }

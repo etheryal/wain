@@ -1,5 +1,4 @@
 #![feature(test)]
-
 extern crate test;
 
 #[cfg(test)]
@@ -48,13 +47,16 @@ mod example_benches {
         ($name:ident, $file:expr) => {
             #[bench]
             pub fn $name(b: &mut Bencher) {
+                use futures::executor::block_on;
                 let source = read_source($file);
                 b.iter(|| {
-                    let ast = unwrap(parse(&source));
-                    unwrap(validate(&ast));
-                    let importer = DefaultImporter::with_stdio(Discard, Discard);
-                    let mut runtime = unwrap(Runtime::instantiate(&ast.module, importer));
-                    unwrap(runtime.invoke("_start", &[]));
+                    block_on(async {
+                        let ast = unwrap(parse(&source));
+                        unwrap(validate(&ast));
+                        let importer = DefaultImporter::with_stdio(Discard, Discard);
+                        let mut runtime = unwrap(Runtime::instantiate(&ast.module, importer));
+                        unwrap(runtime.invoke("_start", &[]).await);
+                    });
                 });
             }
         };

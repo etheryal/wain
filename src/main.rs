@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::dbg_macro)]
 
+use futures::executor::block_on;
 use std::env;
 use std::fmt;
 use std::fs;
@@ -142,15 +143,16 @@ fn unwrap<T, E: fmt::Display>(phase: &'static str, result: Result<T, E>) -> T {
     }
 }
 
-fn run<S: wain_ast::source::Source>(ast: wain_ast::Root<'_, S>) {
+async fn run<S: wain_ast::source::Source>(ast: wain_ast::Root<'_, S>) {
     unwrap("validation", wain_validate::validate(&ast));
-    unwrap("running wasm", wain_exec::execute(&ast.module))
+    unwrap("running wasm", wain_exec::execute(&ast.module).await)
 }
 
 #[cfg(feature = "binary")]
 fn run_binary(bin: Vec<u8>) {
-    run(unwrap("parsing", wain_syntax_binary::parse(&bin)))
+    block_on(async { run(unwrap("parsing", wain_syntax_binary::parse(&bin))).await });
 }
+
 #[cfg(not(feature = "binary"))]
 fn run_binary(_: Vec<u8>) {
     unimplemented!("running binary format is not supported since built without 'binary' feature")
@@ -158,8 +160,9 @@ fn run_binary(_: Vec<u8>) {
 
 #[cfg(feature = "text")]
 fn run_text(text: String) {
-    run(unwrap("parsing", wain_syntax_text::parse(&text)))
+    block_on(async { run(unwrap("parsing", wain_syntax_text::parse(&text))).await });
 }
+
 #[cfg(not(feature = "text"))]
 fn run_text(_: String) {
     unimplemented!("running text format is not supported since built without 'text' feature")

@@ -2,6 +2,7 @@ extern crate wain_exec;
 extern crate wain_syntax_text;
 extern crate wain_validate;
 
+use futures::executor::block_on;
 use std::io;
 use std::process::exit;
 use wain_exec::{DefaultImporter, Runtime, Value};
@@ -76,19 +77,21 @@ fn main() {
         }
     };
 
-    // `int add(int, int)` is exported as `(func (param i32) (result i32))`.
-    // Let's invoke add(10, 32). `Value` is an enum to represent arbitrary value of Wasm. Wasm has
-    // i32, i64, f32, f64 basic types.
-    match runtime.invoke("add", &[Value::I32(10), Value::I32(32)]) {
-        Ok(ret) => {
-            // `ret` is type of `Option<Value>` where it contains `Some` value when the invoked
-            // function returned a value. Otherwise it's `None` value.
-            if let Some(Value::I32(i)) = ret {
-                println!("10 + 32 = {}", i);
-            } else {
-                unreachable!();
+    block_on(async {
+        // `int add(int, int)` is exported as `(func (param i32) (result i32))`.
+        // Let's invoke add(10, 32). `Value` is an enum to represent arbitrary value of Wasm. Wasm has
+        // i32, i64, f32, f64 basic types.
+        match runtime.invoke("add", &[Value::I32(10), Value::I32(32)]).await {
+            Ok(ret) => {
+                // `ret` is type of `Option<Value>` where it contains `Some` value when the invoked
+                // function returned a value. Otherwise it's `None` value.
+                if let Some(Value::I32(i)) = ret {
+                    println!("10 + 32 = {}", i);
+                } else {
+                    unreachable!();
+                }
             }
+            Err(trap) => eprintln!("Execution was trapped: {}", trap),
         }
-        Err(trap) => eprintln!("Execution was trapped: {}", trap),
-    }
+    });
 }
