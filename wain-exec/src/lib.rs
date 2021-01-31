@@ -17,6 +17,7 @@ mod runtime;
 mod stack;
 mod table;
 mod value;
+mod yield_now;
 
 #[cfg(feature = "std")]
 pub use import::DefaultImporter;
@@ -49,7 +50,7 @@ pub async fn execute(module: &Module<'_>) -> Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let importer = DefaultImporter::with_stdio(stdin.lock(), stdout.lock());
-    let mut runtime = Runtime::instantiate(module, importer)?;
+    let mut runtime = Runtime::instantiate(module, importer, core::u16::MAX)?;
     runtime.invoke_start().await?;
     Ok(())
 }

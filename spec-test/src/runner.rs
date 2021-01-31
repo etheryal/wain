@@ -297,7 +297,7 @@ impl<'m, 's> Instances<'m, 's> {
     }
 
     fn new_runtime(&self, m: &'m ast::Module<'s>, pos: usize) -> Result<'s, TestRuntime<'m, 's>> {
-        let runtime = Runtime::instantiate(m, SpecTestImporter)
+        let runtime = Runtime::instantiate(m, SpecTestImporter, core::u16::MAX)
             .map_err(|err| Error::run_error(RunKind::Trapped(*err), self.source, pos))?;
         Ok(runtime)
     }
@@ -529,7 +529,7 @@ impl<'a> Tester<'a> {
                 pred: wast::TrapPredicate::Module(root),
             }) => {
                 validate(root)?;
-                match Runtime::instantiate(&root.module, SpecTestImporter) {
+                match Runtime::instantiate(&root.module, SpecTestImporter, core::u16::MAX) {
                     Ok(_) => Err(Error::run_error(
                         RunKind::InvokeTrapExpected {
                             ret: None,

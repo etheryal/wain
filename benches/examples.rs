@@ -54,7 +54,8 @@ mod example_benches {
                         let ast = unwrap(parse(&source));
                         unwrap(validate(&ast));
                         let importer = DefaultImporter::with_stdio(Discard, Discard);
-                        let mut runtime = unwrap(Runtime::instantiate(&ast.module, importer));
+                        let mut runtime =
+                            unwrap(Runtime::instantiate(&ast.module, importer, core::u16::MAX));
                         unwrap(runtime.invoke("_start", &[]).await);
                     });
                 });

@@ -69,7 +69,7 @@ fn main() {
     let importer = DefaultImporter::with_stdio(stdin.lock(), stdout.lock());
 
     // Make abstract machine runtime. This instantiates Wasm module
-    let mut runtime = match Runtime::instantiate(&tree.module, importer) {
+    let mut runtime = match Runtime::instantiate(&tree.module, importer, core::u16::MAX) {
         Ok(rt) => rt,
         Err(err) => {
             eprintln!("could not instantiate module: {}", err);

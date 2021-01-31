@@ -88,7 +88,7 @@ fn main() {
     // Don't validate the tree since validation has been done in spec test
 
     let importer = DefaultImporter::with_stdio(Discard, Discard);
-    let mut runtime = match Runtime::instantiate(&ast.module, importer) {
+    let mut runtime = match Runtime::instantiate(&ast.module, importer, core::u16::MAX) {
         Ok(rt) => rt,
         Err(err) => panic!(
             "cannot instantiate module '{}' at offset {}: {}",

@@ -65,6 +65,8 @@ pub struct ModuleInstance<'module, 'source> {
 // State of abtract machine to run wasm code. This struct contains both store and stack
 // https://webassembly.github.io/spec/core/exec/runtime.html
 pub struct Runtime<'module, 'source, I: Importer> {
+    processed_instructions: u16,
+    max_instructions: u16,
     module: ModuleInstance<'module, 'source>,
     stack: Stack,
     importer: I,
@@ -77,7 +79,11 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
     /// unspecified, meaning that it may crash or the result may be incorrect.
     ///
     /// https://webassembly.github.io/spec/core/exec/modules.html#instantiation
-    pub fn instantiate(module: &'m ast::Module<'s>, importer: I) -> Result<Self> {
+    pub fn instantiate(
+        module: &'m ast::Module<'s>,
+        importer: I,
+        max_instructions: u16,
+    ) -> Result<Self> {
         // TODO: 2., 3., 4. Validate external values before instantiate globals
 
         fn unknown_import(import: &ast::Import, at: usize) -> Box<Trap> {
@@ -162,6 +168,8 @@ impl<'m, 's, I: Importer> Runtime<'m, 's, I> {
             },
             stack,
             importer,
+            max_instructions,
+            processed_instructions: 0,
         })
     }
 
@@ -452,6 +460,12 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
     async fn execute(&self, runtime: &mut Runtime<'m, 's, I>) -> ExecResult {
         use ast::InsnKind::*;
         use std::ops::*;
+
+        if runtime.processed_instructions > runtime.max_instructions {
+            crate::yield_now::yield_now().await;
+            runtime.processed_instructions = 0;
+        }
+
         #[allow(clippy::float_cmp)]
         match &self.kind {
             // Control instructions
@@ -1104,7 +1118,8 @@ mod tests {
             let mut stdout = vec![];
             {
                 let importer = DefaultImporter::with_stdio(Discard, &mut stdout);
-                let mut runtime = unwrap(Runtime::instantiate(&ast.module, importer));
+                let mut runtime =
+                    unwrap(Runtime::instantiate(&ast.module, importer, core::u16::MAX));
                 runtime.invoke("_start", &[]).await?;
             }
             Ok(stdout)
@@ -1165,7 +1180,7 @@ mod tests {
         });
 
         let importer = DefaultImporter::with_stdio(Discard, Discard);
-        let mut runtime = Runtime::instantiate(&module, importer)?;
+        let mut runtime = Runtime::instantiate(&module, importer, core::u16::MAX)?;
 
         runtime.invoke("test", &[]).await
     }
