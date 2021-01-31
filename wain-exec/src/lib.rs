@@ -9,9 +9,9 @@ use std::prelude::v1::*;
 
 pub mod trap;
 
-mod import;
 mod cast;
 mod globals;
+mod import;
 mod memory;
 mod runtime;
 mod stack;
@@ -19,9 +19,8 @@ mod table;
 mod value;
 
 #[cfg(feature = "std")]
-pub use import::{
-    check_func_signature, DefaultImporter, ImportInvalidError, ImportInvokeError, Importer,
-};
+pub use import::DefaultImporter;
+pub use import::{check_func_signature, ImportInvalidError, ImportInvokeError, Importer};
 pub use memory::Memory;
 pub use runtime::Runtime;
 pub use stack::Stack;

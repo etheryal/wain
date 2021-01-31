@@ -883,7 +883,7 @@ impl<'m, 's, I: Importer> Execute<'m, 's, I> for ast::Instruction {
                 #[cfg(not(feature = "std"))]
                 let fabs = libm::fabs(f - fround);
 
-                if fabs== 0.5 && fround % 2.0 != 0.0 {
+                if fabs == 0.5 && fround % 2.0 != 0.0 {
                     #[cfg(feature = "std")]
                     let ftrunc = f.trunc();
 
