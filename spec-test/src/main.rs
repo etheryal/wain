@@ -7,6 +7,7 @@ mod parser;
 mod runner;
 mod wast;
 
+use futures::executor::block_on;
 use runner::Runner;
 use std::env;
 use std::ffi::OsStr;
@@ -94,41 +95,43 @@ fn parse_options() -> Result<Options, &'static str> {
 }
 
 fn main() -> io::Result<()> {
-    let opts = match parse_options() {
-        Ok(opts) => opts,
-        Err(msg) => {
-            println!("{}. Please see --help", msg);
+    block_on(async {
+        let opts = match parse_options() {
+            Ok(opts) => opts,
+            Err(msg) => {
+                println!("{}. Please see --help", msg);
+                exit(1);
+            }
+        };
+
+        if opts.help {
+            println!("Usage: spec-tester [-f|--fast-fail|-w {{file}}|--write-summary {{file}}|-h|--help] [{{file}}|{{dir}}]");
+            exit(0);
+        }
+
+        println!("Running tests for {:?}...", opts.target.path());
+
+        let stdout = io::stdout();
+        let mut runner = Runner::new(stdout.lock(), opts.fast_fail, opts.write);
+        let summary = match &opts.target {
+            Target::Dir(dir) => runner.run_dir(dir).await?,
+            Target::File(path, file) => runner.run_file(path, file).await?,
+        };
+        if let Some(allowed) = opts.allowed_failures {
+            let actual = summary.failures();
+            if allowed < actual {
+                eprintln!(
+                    "Expected {} or fewer failures but actually got {} failures",
+                    allowed, actual
+                );
+                exit(1);
+            }
+        } else if summary.success() {
+            println!("🎊");
+        } else {
             exit(1);
         }
-    };
 
-    if opts.help {
-        println!("Usage: spec-tester [-f|--fast-fail|-w {{file}}|--write-summary {{file}}|-h|--help] [{{file}}|{{dir}}]");
-        exit(0);
-    }
-
-    println!("Running tests for {:?}...", opts.target.path());
-
-    let stdout = io::stdout();
-    let mut runner = Runner::new(stdout.lock(), opts.fast_fail, opts.write);
-    let summary = match &opts.target {
-        Target::Dir(dir) => runner.run_dir(dir)?,
-        Target::File(path, file) => runner.run_file(path, file)?,
-    };
-    if let Some(allowed) = opts.allowed_failures {
-        let actual = summary.failures();
-        if allowed < actual {
-            eprintln!(
-                "Expected {} or fewer failures but actually got {} failures",
-                allowed, actual
-            );
-            exit(1);
-        }
-    } else if summary.success() {
-        println!("🎊");
-    } else {
-        exit(1);
-    }
-
-    Ok(())
+        Ok(())
+    })
 }

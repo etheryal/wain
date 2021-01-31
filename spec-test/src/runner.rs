@@ -3,7 +3,6 @@ use crate::error::{Error, ErrorKind, Result, RunKind};
 use crate::importer::SpecTestImporter;
 use crate::parser::Parser;
 use crate::wast;
-use futures::executor::block_on;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -179,7 +178,7 @@ impl<W: Write> Runner<W> {
         Ok(())
     }
 
-    pub fn run_dir(&mut self, dir: &Path) -> io::Result<Summary> {
+    pub async fn run_dir(&mut self, dir: &Path) -> io::Result<Summary> {
         let mut total = Summary::default();
         let mut num_files = 0;
         let mut summaries = vec![];
@@ -197,7 +196,7 @@ impl<W: Write> Runner<W> {
                 continue;
             }
 
-            let sum = self.run_file(&path, file)?;
+            let sum = self.run_file(&path, file).await?;
             if self.fast_fail && !sum.success() {
                 break;
             }
@@ -222,7 +221,7 @@ impl<W: Write> Runner<W> {
         Ok(total)
     }
 
-    pub fn run_file(&mut self, path: &Path, file: &str) -> io::Result<Summary> {
+    pub async fn run_file(&mut self, path: &Path, file: &str) -> io::Result<Summary> {
         self.out.write_all(color::BLUE).unwrap();
         writeln!(&mut self.out, "\nStart: {:?}", path).unwrap();
         self.out.write_all(color::RESET).unwrap();
@@ -255,7 +254,7 @@ impl<W: Write> Runner<W> {
                         source: &source,
                         script: &script,
                     };
-                    block_on(async { tester.test(&self.crasher).await });
+                    tester.test(&self.crasher).await;
                     let num_errs = tester.errs.len();
                     for (idx, err) in tester.errs.iter_mut().enumerate() {
                         let nth = idx + 1;
@@ -433,211 +432,208 @@ impl<'a> Tester<'a> {
 
         let mut instances = Instances::new(&idx_to_mod, self.source);
         for (idx, cmd) in self.script.commands.iter().enumerate() {
-            let result = self.test_command(idx, cmd, &mut instances, crasher);
-            self.check(result);
-        }
-    }
+            let test_command = async {
+                use wast::Command::*;
 
-    fn test_command<'m>(
-        &self,
-        idx: usize,
-        command: &'a wast::Command<'a>,
-        instances: &mut Instances<'m, 'a>,
-        crasher: &CrashTester,
-    ) -> Result<'a, ()> {
-        use wast::Command::*;
-
-        match command {
-            InlineModule(root) => {
-                validate(root)?;
-                instances.push(&root.module, root.module.start)
-            }
-            EmbeddedModule(_) => instances.push_with_idx(idx),
-            AssertReturn(wast::AssertReturn::Invoke {
-                start,
-                invoke,
-                expected,
-            }) => {
-                let ret = block_on(async { instances.invoke(invoke).await })?;
-                if let (Some(expected), Some(actual)) = (*expected, ret) {
-                    if !expected.matches(&actual) {
-                        return Err(Error::run_error(
-                            RunKind::InvokeUnexpectedReturn { actual, expected },
-                            self.source,
-                            *start,
-                        ));
+                match cmd {
+                    InlineModule(root) => {
+                        validate(root)?;
+                        instances.push(&root.module, root.module.start)
                     }
-                }
-                Ok(())
-            }
-            AssertReturn(wast::AssertReturn::Global {
-                start,
-                get,
-                expected,
-            }) => {
-                let (runtime, _) = instances.find(get.id, *start)?;
-                if let Some(actual) = runtime.get_global(&get.name) {
-                    if expected.matches(&actual) {
+                    EmbeddedModule(_) => instances.push_with_idx(idx),
+                    AssertReturn(wast::AssertReturn::Invoke {
+                        start,
+                        invoke,
+                        expected,
+                    }) => {
+                        let ret = instances.invoke(invoke).await?;
+                        if let (Some(expected), Some(actual)) = (*expected, ret) {
+                            if !expected.matches(&actual) {
+                                return Err(Error::run_error(
+                                    RunKind::InvokeUnexpectedReturn { actual, expected },
+                                    self.source,
+                                    *start,
+                                ));
+                            }
+                        }
                         Ok(())
-                    } else {
-                        Err(Error::run_error(
-                            RunKind::InvokeUnexpectedReturn {
-                                actual,
-                                expected: *expected,
+                    }
+                    AssertReturn(wast::AssertReturn::Global {
+                        start,
+                        get,
+                        expected,
+                    }) => {
+                        let (runtime, _) = instances.find(get.id, *start)?;
+                        if let Some(actual) = runtime.get_global(&get.name) {
+                            if expected.matches(&actual) {
+                                Ok(())
+                            } else {
+                                Err(Error::run_error(
+                                    RunKind::InvokeUnexpectedReturn {
+                                        actual,
+                                        expected: *expected,
+                                    },
+                                    self.source,
+                                    *start,
+                                ))
+                            }
+                        } else {
+                            Err(Error::run_error(
+                                RunKind::GlobalNotFound(get.name.clone()),
+                                self.source,
+                                *start,
+                            ))
+                        }
+                    }
+                    AssertTrap(wast::AssertTrap {
+                        start,
+                        expected,
+                        pred: wast::TrapPredicate::Invoke(invoke),
+                    }) => {
+                        match instances.invoke(invoke).await {
+                            Ok(ret) => Err(Error::run_error(
+                                RunKind::InvokeTrapExpected {
+                                    ret,
+                                    expected: expected.clone(),
+                                },
+                                self.source,
+                                *start,
+                            )),
+                            Err(err)
+                                if matches!(
+                                    err.kind(),
+                                    ErrorKind::Run(RunKind::Trapped(_trap))
+                                ) =>
+                            {
+                                // Expected path. Execution was trapped
+                                //
+                                // TODO: Check trap reason is what we expected.
+                                // `expected` is an expected error message as string but we don't conform
+                                // the message. So we need to have logic for mapping from expected message
+                                // to our error.
+                                Ok(())
+                            }
+                            Err(err) => Err(err),
+                        }
+                    }
+                    AssertTrap(wast::AssertTrap {
+                        start,
+                        expected,
+                        pred: wast::TrapPredicate::Module(root),
+                    }) => {
+                        validate(root)?;
+                        match Runtime::instantiate(&root.module, SpecTestImporter, core::u16::MAX) {
+                            Ok(_) => Err(Error::run_error(
+                                RunKind::InvokeTrapExpected {
+                                    ret: None,
+                                    expected: expected.clone(),
+                                },
+                                self.source,
+                                *start,
+                            )),
+                            Err(_trap) => {
+                                // TODO: Check trap reason is what we expected.
+                                // `expected` is an expected error message as string but we don't conform
+                                // the message. So we need to have logic for mapping from expected message
+                                // to our error.
+                                Ok(())
+                            }
+                        }
+                    }
+                    AssertInvalid(wast::AssertInvalid {
+                        start,
+                        wat,
+                        expected,
+                    }) => match validate(wat) {
+                        Ok(()) => Err(Error::run_error(
+                            RunKind::UnexpectedValid {
+                                expected: expected.clone(),
                             },
                             self.source,
                             *start,
-                        ))
-                    }
-                } else {
-                    Err(Error::run_error(
-                        RunKind::GlobalNotFound(get.name.clone()),
-                        self.source,
-                        *start,
-                    ))
-                }
-            }
-            AssertTrap(wast::AssertTrap {
-                start,
-                expected,
-                pred: wast::TrapPredicate::Invoke(invoke),
-            }) => {
-                match block_on(async { instances.invoke(invoke).await }) {
-                    Ok(ret) => Err(Error::run_error(
-                        RunKind::InvokeTrapExpected {
-                            ret,
-                            expected: expected.clone(),
-                        },
-                        self.source,
-                        *start,
-                    )),
-                    Err(err) if matches!(err.kind(), ErrorKind::Run(RunKind::Trapped(_trap))) => {
-                        // Expected path. Execution was trapped
-                        //
-                        // TODO: Check trap reason is what we expected.
-                        // `expected` is an expected error message as string but we don't conform
-                        // the message. So we need to have logic for mapping from expected message
-                        // to our error.
-                        Ok(())
-                    }
-                    Err(err) => Err(err),
-                }
-            }
-            AssertTrap(wast::AssertTrap {
-                start,
-                expected,
-                pred: wast::TrapPredicate::Module(root),
-            }) => {
-                validate(root)?;
-                match Runtime::instantiate(&root.module, SpecTestImporter, core::u16::MAX) {
-                    Ok(_) => Err(Error::run_error(
-                        RunKind::InvokeTrapExpected {
-                            ret: None,
-                            expected: expected.clone(),
-                        },
-                        self.source,
-                        *start,
-                    )),
-                    Err(_trap) => {
-                        // TODO: Check trap reason is what we expected.
-                        // `expected` is an expected error message as string but we don't conform
-                        // the message. So we need to have logic for mapping from expected message
-                        // to our error.
-                        Ok(())
-                    }
-                }
-            }
-            AssertInvalid(wast::AssertInvalid {
-                start,
-                wat,
-                expected,
-            }) => match validate(wat) {
-                Ok(()) => Err(Error::run_error(
-                    RunKind::UnexpectedValid {
-                        expected: expected.clone(),
-                    },
-                    self.source,
-                    *start,
-                )),
-                Err(_err) => {
-                    // TODO: Check validation error is what we expected.
-                    // `expected` is an expected error message as string but we don't conform the
-                    // message. We need to have logic for mapping from the expected message to our error.
-                    Ok(())
-                }
-            },
-            AssertMalformed(wast::AssertMalformed {
-                start,
-                module,
-                expected,
-            }) => {
-                let success = match &module.src {
-                    wast::EmbeddedSrc::Quote(text) => match wat::parse(text) {
-                        Ok(_) => true,
+                        )),
                         Err(_err) => {
-                            // TODO: Check parse error is what we expected.
-                            // `expected` is an expected error message as string but we don't conform
-                            // the message. We need to have logic for mapping from the expected message
-                            // to our error.
-                            false
+                            // TODO: Check validation error is what we expected.
+                            // `expected` is an expected error message as string but we don't conform the
+                            // message. We need to have logic for mapping from the expected message to our error.
+                            Ok(())
                         }
                     },
-                    wast::EmbeddedSrc::Binary(bin) => match binary::parse(bin) {
-                        Ok(_) => true,
-                        Err(_err) => {
-                            // TODO: Check parse error is what we expected.
-                            // `expected` is an expected error message as string but we don't conform
-                            // the message. We need to have logic for mapping from the expected message
-                            // to our error.
-                            false
-                        }
-                    },
-                };
+                    AssertMalformed(wast::AssertMalformed {
+                        start,
+                        module,
+                        expected,
+                    }) => {
+                        let success = match &module.src {
+                            wast::EmbeddedSrc::Quote(text) => match wat::parse(text) {
+                                Ok(_) => true,
+                                Err(_err) => {
+                                    // TODO: Check parse error is what we expected.
+                                    // `expected` is an expected error message as string but we don't conform
+                                    // the message. We need to have logic for mapping from the expected message
+                                    // to our error.
+                                    false
+                                }
+                            },
+                            wast::EmbeddedSrc::Binary(bin) => match binary::parse(bin) {
+                                Ok(_) => true,
+                                Err(_err) => {
+                                    // TODO: Check parse error is what we expected.
+                                    // `expected` is an expected error message as string but we don't conform
+                                    // the message. We need to have logic for mapping from the expected message
+                                    // to our error.
+                                    false
+                                }
+                            },
+                        };
 
-                if success {
-                    Err(Error::run_error(
-                        RunKind::ExpectedParseError {
-                            expected: expected.clone(),
-                        },
-                        self.source,
-                        *start,
-                    ))
-                } else {
-                    Ok(())
-                }
-            }
-            AssertExhaustion(wast::AssertExhaustion {
-                start,
-                expected,
-                invoke,
-            }) => {
-                let (_, mod_pos) = instances.find(invoke.id, invoke.start)?;
-                let stderr =
-                    crasher.test_crash(self.source, mod_pos, &invoke.name, &invoke.args)?;
-                match expected.as_str() {
-                    "call stack exhausted"
-                        if stderr.contains("fatal runtime error: stack overflow")
-                            || stderr.contains("has overflowed its stack") =>
-                    {
-                        Ok(())
+                        if success {
+                            Err(Error::run_error(
+                                RunKind::ExpectedParseError {
+                                    expected: expected.clone(),
+                                },
+                                self.source,
+                                *start,
+                            ))
+                        } else {
+                            Ok(())
+                        }
                     }
-                    _ => Err(Error::run_error(
-                        RunKind::UnexpectedCrash {
-                            stderr,
-                            expected: expected.clone(),
-                        },
-                        self.source,
-                        *start,
-                    )),
+                    AssertExhaustion(wast::AssertExhaustion {
+                        start,
+                        expected,
+                        invoke,
+                    }) => {
+                        let (_, mod_pos) = instances.find(invoke.id, invoke.start)?;
+                        let stderr =
+                            crasher.test_crash(self.source, mod_pos, &invoke.name, &invoke.args)?;
+                        match expected.as_str() {
+                            "call stack exhausted"
+                                if stderr.contains("fatal runtime error: stack overflow")
+                                    || stderr.contains("has overflowed its stack") =>
+                            {
+                                Ok(())
+                            }
+                            _ => Err(Error::run_error(
+                                RunKind::UnexpectedCrash {
+                                    stderr,
+                                    expected: expected.clone(),
+                                },
+                                self.source,
+                                *start,
+                            )),
+                        }
+                    }
+                    Register(wast::Register { start, .. })
+                    | AssertUnlinkable(wast::AssertUnlinkable { start, .. }) => Err(
+                        Error::run_error(RunKind::NotImplementedYet, self.source, *start),
+                    ),
+                    Invoke(invoke) => instances.invoke(invoke).await.map(|_| ()),
                 }
-            }
-            Register(wast::Register { start, .. })
-            | AssertUnlinkable(wast::AssertUnlinkable { start, .. }) => Err(Error::run_error(
-                RunKind::NotImplementedYet,
-                self.source,
-                *start,
-            )),
-            Invoke(invoke) => block_on(async { instances.invoke(invoke).await }).map(|_| ()),
+            };
+
+            let result = test_command.await;
+            self.check(result);
         }
     }
 }
