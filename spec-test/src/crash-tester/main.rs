@@ -1,3 +1,4 @@
+use futures::executor::block_on;
 use std::env;
 use std::io;
 use std::io::{BufRead, Read};
@@ -5,7 +6,6 @@ use std::process;
 use wain_exec::{DefaultImporter, Runtime, Value};
 use wain_syntax_text::parser::Parser;
 use wain_syntax_text::wat2wasm::wat2wasm;
-use futures::executor::block_on;
 
 struct Discard;
 

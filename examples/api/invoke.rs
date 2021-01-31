@@ -81,7 +81,10 @@ fn main() {
         // `int add(int, int)` is exported as `(func (param i32) (result i32))`.
         // Let's invoke add(10, 32). `Value` is an enum to represent arbitrary value of Wasm. Wasm has
         // i32, i64, f32, f64 basic types.
-        match runtime.invoke("add", &[Value::I32(10), Value::I32(32)]).await {
+        match runtime
+            .invoke("add", &[Value::I32(10), Value::I32(32)])
+            .await
+        {
             Ok(ret) => {
                 // `ret` is type of `Option<Value>` where it contains `Some` value when the invoked
                 // function returned a value. Otherwise it's `None` value.
