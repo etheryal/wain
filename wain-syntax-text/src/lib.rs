@@ -21,7 +21,7 @@ use source::TextSource;
 use std::fmt;
 use wat2wasm::{wat2wasm, TransformError};
 
-// TODO: Unify all error types into one error type
+#[derive(Debug)]
 pub enum Error<'source> {
     Parse(Box<ParseError<'source>>),
     Transform(Box<TransformError<'source>>),

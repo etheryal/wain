@@ -25,7 +25,7 @@ pub(crate) fn describe_position(
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BinarySource<'source>(pub(crate) &'source [u8]);
 
 impl<'s> Source for BinarySource<'s> {

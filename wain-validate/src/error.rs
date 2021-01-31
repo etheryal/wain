@@ -4,7 +4,7 @@ use std::prelude::v1::*;
 use wain_ast::source::Source;
 use wain_ast::*;
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum ErrorKind {
     IndexOutOfBounds {
         idx: u32,
@@ -59,7 +59,7 @@ pub enum ErrorKind {
     },
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct Error<S: Source> {
     kind: ErrorKind,
     source: S,

@@ -6,8 +6,7 @@ use std::mem::size_of;
 use std::ops;
 use wain_ast::ValType;
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     I32(i32),
     I64(i64),

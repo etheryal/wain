@@ -20,7 +20,7 @@ pub fn describe_position(f: &mut fmt::Formatter<'_>, source: &str, start: usize)
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TextSource<'source>(pub(crate) &'source str);
 
 impl<'s> Source for TextSource<'s> {

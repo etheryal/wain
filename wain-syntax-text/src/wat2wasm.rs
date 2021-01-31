@@ -7,7 +7,7 @@ use std::fmt;
 use std::mem;
 use wain_ast as wasm;
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum TransformErrorKind<'source> {
     IdIsNotDefined {
         id: &'source str,
@@ -30,7 +30,7 @@ pub enum TransformErrorKind<'source> {
     },
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct TransformError<'s> {
     kind: TransformErrorKind<'s>,
     offset: usize,

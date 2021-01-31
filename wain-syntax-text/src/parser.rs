@@ -14,7 +14,7 @@ use std::ops;
 use std::str;
 use std::str::FromStr;
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum ParseErrorKind<'source> {
     LexError(LexError<'source>),
     UnexpectedToken {
@@ -59,7 +59,7 @@ pub enum ParseErrorKind<'source> {
     IdBoundToParam(&'source str),
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct ParseError<'s> {
     kind: ParseErrorKind<'s>,
     offset: usize,

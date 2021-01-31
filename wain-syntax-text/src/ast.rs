@@ -76,8 +76,7 @@ pub struct FuncResult {
 }
 
 // https://webassembly.github.io/spec/core/text/types.html#text-valtype
-#[derive(PartialEq, Clone, Copy)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum ValType {
     I32,
     I64,
@@ -138,7 +137,7 @@ pub struct ImplicitTypeUse<'s> {
 }
 
 // https://webassembly.github.io/spec/core/text/modules.html#indices
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Index<'s> {
     Num(u32),
     Ident(&'s str),
@@ -508,7 +507,7 @@ pub struct Global<'s> {
 }
 
 // https://webassembly.github.io/spec/core/text/modules.html#text-start
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct Start<'s> {
     pub start: usize,
     pub idx: Index<'s>,

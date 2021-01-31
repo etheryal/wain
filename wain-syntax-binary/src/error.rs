@@ -4,7 +4,7 @@ use crate::source::describe_position;
 use std::fmt;
 use std::str::Utf8Error;
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum ErrorKind {
     IntOverflow {
         ty: &'static str,
@@ -44,7 +44,7 @@ pub enum ErrorKind {
     ExpectedEof(u8),
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct Error<'source> {
     pub kind: ErrorKind,
     pub pos: usize,

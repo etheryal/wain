@@ -4,7 +4,7 @@ use crate::value::Value;
 use std::fmt;
 use wain_ast::{Import, ValType};
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum TrapReason {
     UnknownImport {
         mod_name: String,
@@ -66,7 +66,7 @@ pub enum TrapReason {
     },
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct Trap {
     pub reason: TrapReason,
     pub offset: usize,

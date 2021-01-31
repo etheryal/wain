@@ -12,6 +12,7 @@ use crate::source::describe_position;
 use std::fmt;
 use wain_ast::*;
 
+#[derive(Debug)]
 pub struct ComposeError<'source> {
     dest_mod_id: Option<&'source str>,
     dest_mod_offset: usize,

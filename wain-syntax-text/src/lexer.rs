@@ -8,8 +8,7 @@ use std::iter;
 use std::ops;
 use std::str;
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum LexErrorKind<'source> {
     UnterminatedBlockComment,
     UnterminatedString,
@@ -19,10 +18,7 @@ pub enum LexErrorKind<'source> {
     InvalidStringFormat,
 }
 
-// TODO: Support std::error::Error
-
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LexError<'source> {
     kind: LexErrorKind<'source>,
     offset: usize,
@@ -65,8 +61,7 @@ impl<'s> fmt::Display for LexError<'s> {
 
 type Result<'s, T> = ::std::result::Result<T, Box<LexError<'s>>>;
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sign {
     Plus,
     Minus,
@@ -90,8 +85,7 @@ impl fmt::Display for Sign {
     }
 }
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum NumBase {
     Hex,
     Dec,
@@ -114,8 +108,7 @@ impl NumBase {
 }
 
 // https://webassembly.github.io/spec/core/text/values.html#floating-point
-#[cfg_attr(test, derive(Debug, PartialEq))]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Float<'source> {
     Nan(Option<&'source str>),
     Inf,
@@ -127,8 +120,7 @@ pub enum Float<'source> {
 }
 
 // https://webassembly.github.io/spec/core/text/lexical.html#tokens
-#[cfg_attr(test, derive(Debug, PartialEq))]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Token<'source> {
     LParen,
     RParen,
